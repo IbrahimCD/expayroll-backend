@@ -1,6 +1,6 @@
 "use strict";
 
-var PayRun = require('../PayRun/payRun.model');
+var PayRun = require('../payRun/payRun.model');
 
 var Employee = require('../Employee/employee.model');
 

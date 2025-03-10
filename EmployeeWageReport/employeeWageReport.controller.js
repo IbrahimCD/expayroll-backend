@@ -1,4 +1,4 @@
-const PayRun = require('../PayRun/payRun.model');
+const PayRun = require('../payRun/payRun.model');
 const Employee = require('../Employee/employee.model');
 const Location = require('../Location/location.model');
 
