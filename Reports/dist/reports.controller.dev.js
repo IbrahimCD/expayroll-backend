@@ -1,7 +1,7 @@
 "use strict";
 
 // backend/Reports/reports.controller.js
-var PayRun = require('../PayRun/payRun.model');
+var PayRun = require('../payRun/payRun.model');
 
 var Timesheet = require('../Timesheet/timesheet.model');
 

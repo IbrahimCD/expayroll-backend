@@ -1,5 +1,5 @@
 // backend/Reports/reports.controller.js
-const PayRun = require('../PayRun/payRun.model');
+const PayRun = require('../payRun/payRun.model');
 const Timesheet = require('../Timesheet/timesheet.model');
 const Location = require('../Location/location.model');
 const mongoose = require('mongoose');
