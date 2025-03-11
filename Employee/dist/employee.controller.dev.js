@@ -34,33 +34,48 @@ exports.createEmployee = function _callee(req, res) {
           // Merge organizationId from the token into the payload:
           payload = _objectSpread({}, req.body, {
             organizationId: req.user.orgId
-          }); // Process payStructure.dailyRates if provided (using the new nested structure)
+          }); // --- NEW: If payStructure provided, ensure otherConsiderations arrays exist. ---
 
-          if (payload.payStructure && payload.payStructure.dailyRates) {
-            dr = payload.payStructure.dailyRates; // Process NI Daily Rates based on niDayMode
+          if (payload.payStructure) {
+            // Process payStructure.dailyRates if provided (using your new nested structure)
+            if (payload.payStructure.dailyRates) {
+              dr = payload.payStructure.dailyRates; // Process NI Daily Rates based on niDayMode
 
-            if (dr.niDayMode === 'NONE') {
-              dr.niRates = {
-                regularDays: 0,
-                regularDayRate: 0,
-                extraDayRate: 0,
-                extraShiftRate: 0
-              };
-            } else if (dr.niDayMode === 'FIXED') {
-              // Ensure niRates exists; then reset extra fields
-              dr.niRates = dr.niRates || {};
-              dr.niRates.extraDayRate = 0;
-              dr.niRates.extraShiftRate = 0;
-            } // Process Cash Daily Rates based on cashDayMode
+              if (dr.niDayMode === 'NONE') {
+                dr.niRates = {
+                  regularDays: 0,
+                  regularDayRate: 0,
+                  extraDayRate: 0,
+                  extraShiftRate: 0
+                };
+              } else if (dr.niDayMode === 'FIXED') {
+                dr.niRates = dr.niRates || {};
+                dr.niRates.extraDayRate = 0;
+                dr.niRates.extraShiftRate = 0;
+              } // Process Cash Daily Rates based on cashDayMode
 
 
-            if (dr.cashDayMode === 'NONE') {
-              dr.cashRates = {
-                regularDays: 0,
-                regularDayRate: 0,
-                extraDayRate: 0,
-                extraShiftRate: 0
-              };
+              if (dr.cashDayMode === 'NONE') {
+                dr.cashRates = {
+                  regularDays: 0,
+                  regularDayRate: 0,
+                  extraDayRate: 0,
+                  extraShiftRate: 0
+                };
+              }
+            } // --- Make sure otherConsiderations is well-formed if hasOtherConsiderations is true ---
+
+
+            if (payload.payStructure.hasOtherConsiderations) {
+              if (!payload.payStructure.otherConsiderations) {
+                payload.payStructure.otherConsiderations = {};
+              } // Default arrays if not provided
+
+
+              payload.payStructure.otherConsiderations.niAdditions = payload.payStructure.otherConsiderations.niAdditions || [];
+              payload.payStructure.otherConsiderations.niDeductions = payload.payStructure.otherConsiderations.niDeductions || [];
+              payload.payStructure.otherConsiderations.cashAdditions = payload.payStructure.otherConsiderations.cashAdditions || [];
+              payload.payStructure.otherConsiderations.cashDeductions = payload.payStructure.otherConsiderations.cashDeductions || [];
             }
           }
 
@@ -91,11 +106,6 @@ exports.createEmployee = function _callee(req, res) {
 };
 /**
  * Get employees with search, filtering, and pagination.
- * Query parameters:
- *   - search: text to search in firstName, lastName, preferredName
- *   - status: filter by employee status
- *   - page: page number (default 1)
- *   - limit: number of items per page (default 20)
  */
 
 
@@ -231,32 +241,46 @@ exports.updateEmployee = function _callee4(req, res) {
         case 0:
           _context4.prev = 0;
           employeeId = req.params.employeeId;
-          updates = req.body; // Process dailyRates update if present using the new nested structure
+          updates = req.body; // --- If payStructure present, do dailyRates logic + ensure otherConsiderations arrays. ---
 
-          if (updates.payStructure && updates.payStructure.dailyRates) {
-            dr = updates.payStructure.dailyRates; // Process NI Daily Rates based on niDayMode
+          if (updates.payStructure) {
+            if (updates.payStructure.dailyRates) {
+              dr = updates.payStructure.dailyRates; // NI Daily Rates
 
-            if (dr.niDayMode === 'NONE') {
-              dr.niRates = {
-                regularDays: 0,
-                regularDayRate: 0,
-                extraDayRate: 0,
-                extraShiftRate: 0
-              };
-            } else if (dr.niDayMode === 'FIXED') {
-              dr.niRates = dr.niRates || {};
-              dr.niRates.extraDayRate = 0;
-              dr.niRates.extraShiftRate = 0;
-            } // Process Cash Daily Rates based on cashDayMode
+              if (dr.niDayMode === 'NONE') {
+                dr.niRates = {
+                  regularDays: 0,
+                  regularDayRate: 0,
+                  extraDayRate: 0,
+                  extraShiftRate: 0
+                };
+              } else if (dr.niDayMode === 'FIXED') {
+                dr.niRates = dr.niRates || {};
+                dr.niRates.extraDayRate = 0;
+                dr.niRates.extraShiftRate = 0;
+              } // Cash Daily Rates
 
 
-            if (dr.cashDayMode === 'NONE') {
-              dr.cashRates = {
-                regularDays: 0,
-                regularDayRate: 0,
-                extraDayRate: 0,
-                extraShiftRate: 0
-              };
+              if (dr.cashDayMode === 'NONE') {
+                dr.cashRates = {
+                  regularDays: 0,
+                  regularDayRate: 0,
+                  extraDayRate: 0,
+                  extraShiftRate: 0
+                };
+              }
+            } // If hasOtherConsiderations, ensure arrays exist
+
+
+            if (updates.payStructure.hasOtherConsiderations) {
+              if (!updates.payStructure.otherConsiderations) {
+                updates.payStructure.otherConsiderations = {};
+              }
+
+              updates.payStructure.otherConsiderations.niAdditions = updates.payStructure.otherConsiderations.niAdditions || [];
+              updates.payStructure.otherConsiderations.niDeductions = updates.payStructure.otherConsiderations.niDeductions || [];
+              updates.payStructure.otherConsiderations.cashAdditions = updates.payStructure.otherConsiderations.cashAdditions || [];
+              updates.payStructure.otherConsiderations.cashDeductions = updates.payStructure.otherConsiderations.cashDeductions || [];
             }
           }
 
@@ -351,12 +375,9 @@ exports.deleteEmployee = function _callee5(req, res) {
       }
     }
   }, null, null, [[0, 10]]);
-}; // Batch Create Employees
-
-/**
- * Batch create employees.
- * Expects req.body.employees to be an array of employee objects parsed from CSV.
- */
+}; // ------------------------------------
+// Batch Create / Batch Update
+// ------------------------------------
 
 
 var locationCache = {}; // { [locationCode]: ObjectId }
@@ -411,11 +432,11 @@ function getLocationIdByCode(orgId, code) {
       }
     }
   });
-}
+} // Helper to parse "Name:amount;Name2:amount2" into array
+
 
 function parsePairs(str) {
-  if (!str) return []; // Expecting "Name1:5;Name2:10" style strings
-
+  if (!str) return [];
   return str.split(';').map(function (item) {
     var _item$split = item.split(':'),
         _item$split2 = _slicedToArray(_item$split, 2),
@@ -428,6 +449,11 @@ function parsePairs(str) {
     };
   });
 }
+/**
+ * Batch create employees.
+ * Expects req.body.employees to be an array of employee objects parsed from CSV.
+ */
+
 
 exports.batchCreateEmployees = function _callee6(req, res) {
   var orgId, employees, createdEmployees, _iteratorNormalCompletion, _didIteratorError, _iteratorError, _loop, _iterator, _step;
@@ -464,8 +490,7 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                 switch (_context7.prev = _context7.next) {
                   case 0:
                     empData = _step.value;
-                    // Set organizationId for each employee record
-                    empData.organizationId = orgId;
+                    empData.organizationId = orgId; // Convert baseLocationId from code to ObjectId
 
                     if (!empData.baseLocationId) {
                       _context7.next = 7;
@@ -552,6 +577,7 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                     empData.locationAccess = accessIds;
 
                   case 39:
+                    // Convert string booleans
                     if (typeof empData.hasDailyRates === 'string') {
                       empData.hasDailyRates = empData.hasDailyRates.toLowerCase() === 'true';
                     }
@@ -562,7 +588,8 @@ exports.batchCreateEmployees = function _callee6(req, res) {
 
                     if (typeof empData.hasOtherConsiderations === 'string') {
                       empData.hasOtherConsiderations = empData.hasOtherConsiderations.toLowerCase() === 'true';
-                    }
+                    } // Build payStructure
+
 
                     empData.payStructure = {
                       payStructureName: empData.payStructureName || '',
@@ -593,7 +620,7 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                         percentageCashHours: Number(empData.percentageCashHours) || 0,
                         cashRatePerHour: Number(empData.cashRatePerHour) || 0
                       },
-                      // In batchCreateEmployees or batchUpdateEmployees:
+                      hasOtherConsiderations: empData.hasOtherConsiderations,
                       otherConsiderations: {
                         note: empData.note || '',
                         niAdditions: parsePairs(empData.niAdditions),
@@ -603,7 +630,7 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                       }
                     }; // Remove flat fields so they aren’t duplicated in the payload
 
-                    ['payStructureName', 'niDayMode', 'ni_regularDays', 'ni_regularDayRate', 'ni_extraDayRate', 'ni_extraShiftRate', 'cashDayMode', 'cash_regularDays', 'cash_regularDayRate', 'cash_extraDayRate', 'cash_extraShiftRate', 'hasHourlyRates', 'niHoursMode', 'minNiHours', 'maxNiHours', 'percentageNiHours', 'niRatePerHour', 'fixedNiHours', 'cashHoursMode', 'minCashHours', 'maxCashHours', 'percentageCashHours', 'cashRatePerHour', 'hasOtherConsiderations', 'note'].forEach(function (field) {
+                    ['payStructureName', 'niDayMode', 'ni_regularDays', 'ni_regularDayRate', 'ni_extraDayRate', 'ni_extraShiftRate', 'cashDayMode', 'cash_regularDays', 'cash_regularDayRate', 'cash_extraDayRate', 'cash_extraShiftRate', 'hasHourlyRates', 'niHoursMode', 'minNiHours', 'maxNiHours', 'percentageNiHours', 'niRatePerHour', 'fixedNiHours', 'cashHoursMode', 'minCashHours', 'maxCashHours', 'percentageCashHours', 'cashRatePerHour', 'hasOtherConsiderations', 'note', 'niAdditions', 'niDeductions', 'cashAdditions', 'cashDeductions'].forEach(function (field) {
                       return delete empData[field];
                     });
                     _context7.next = 46;
@@ -695,8 +722,8 @@ exports.batchCreateEmployees = function _callee6(req, res) {
 };
 /**
  * Batch Update Employees.
- * Expects req.body.employees to be an array of employee objects (e.g., parsed from a CSV)
- * Each object must include an "employeeId" field (the unique identifier) and the fields to update.
+ * Expects req.body.employees to be an array of employee objects
+ * Each object must include an "employeeId" field and the fields to update.
  */
 
 
@@ -829,7 +856,7 @@ exports.batchUpdateEmployees = function _callee7(req, res) {
                     updateData.locationAccess = accessIds;
 
                   case 40:
-                    // Convert string booleans to actual booleans
+                    // Convert string booleans
                     if (typeof updateData.hasDailyRates === 'string') {
                       updateData.hasDailyRates = updateData.hasDailyRates.toLowerCase() === 'true';
                     }
@@ -840,10 +867,10 @@ exports.batchUpdateEmployees = function _callee7(req, res) {
 
                     if (typeof updateData.hasOtherConsiderations === 'string') {
                       updateData.hasOtherConsiderations = updateData.hasOtherConsiderations.toLowerCase() === 'true';
-                    } // Nest pay structure fields if any related field is present
+                    } // If pay structure fields exist, nest them
 
 
-                    if (updateData.payStructureName || updateData.niDayMode || updateData.ni_regularDays || updateData.ni_regularDayRate || updateData.ni_extraDayRate || updateData.ni_extraShiftRate || updateData.cashDayMode || updateData.cash_regularDays || updateData.cash_regularDayRate || updateData.cash_extraDayRate || updateData.cash_extraShiftRate || updateData.hasHourlyRates || updateData.niHoursMode || updateData.minNiHours || updateData.maxNiHours || updateData.percentageNiHours || updateData.niRatePerHour || updateData.fixedNiHours || updateData.cashHoursMode || updateData.minCashHours || updateData.maxCashHours || updateData.percentageCashHours || updateData.cashRatePerHour || updateData.hasOtherConsiderations || updateData.note) {
+                    if (updateData.payStructureName || updateData.niDayMode || updateData.ni_regularDays || updateData.ni_regularDayRate || updateData.ni_extraDayRate || updateData.ni_extraShiftRate || updateData.cashDayMode || updateData.cash_regularDays || updateData.cash_regularDayRate || updateData.cash_extraDayRate || updateData.cash_extraShiftRate || updateData.hasHourlyRates || updateData.niHoursMode || updateData.minNiHours || updateData.maxNiHours || updateData.percentageNiHours || updateData.niRatePerHour || updateData.fixedNiHours || updateData.cashHoursMode || updateData.minCashHours || updateData.maxCashHours || updateData.percentageCashHours || updateData.cashRatePerHour || updateData.hasOtherConsiderations || updateData.note || updateData.niAdditions || updateData.niDeductions || updateData.cashAdditions || updateData.cashDeductions) {
                       updateData.payStructure = {
                         payStructureName: updateData.payStructureName || '',
                         hasDailyRates: updateData.hasDailyRates,
@@ -876,18 +903,18 @@ exports.batchUpdateEmployees = function _callee7(req, res) {
                         hasOtherConsiderations: updateData.hasOtherConsiderations,
                         otherConsiderations: {
                           note: updateData.note || '',
-                          niAdditions: [],
-                          niDeductions: [],
-                          cashAdditions: [],
-                          cashDeductions: []
+                          niAdditions: parsePairs(updateData.niAdditions),
+                          niDeductions: parsePairs(updateData.niDeductions),
+                          cashAdditions: parsePairs(updateData.cashAdditions),
+                          cashDeductions: parsePairs(updateData.cashDeductions)
                         }
                       };
-                    } // Remove flat fields to avoid duplication
+                    } // Remove flat fields so they won’t be duplicated
 
 
-                    ['payStructureName', 'niDayMode', 'ni_regularDays', 'ni_regularDayRate', 'ni_extraDayRate', 'ni_extraShiftRate', 'cashDayMode', 'cash_regularDays', 'cash_regularDayRate', 'cash_extraDayRate', 'cash_extraShiftRate', 'hasHourlyRates', 'niHoursMode', 'minNiHours', 'maxNiHours', 'percentageNiHours', 'niRatePerHour', 'fixedNiHours', 'cashHoursMode', 'minCashHours', 'maxCashHours', 'percentageCashHours', 'cashRatePerHour', 'hasOtherConsiderations', 'note'].forEach(function (field) {
+                    ['payStructureName', 'niDayMode', 'ni_regularDays', 'ni_regularDayRate', 'ni_extraDayRate', 'ni_extraShiftRate', 'cashDayMode', 'cash_regularDays', 'cash_regularDayRate', 'cash_extraDayRate', 'cash_extraShiftRate', 'hasHourlyRates', 'niHoursMode', 'minNiHours', 'maxNiHours', 'percentageNiHours', 'niRatePerHour', 'fixedNiHours', 'cashHoursMode', 'minCashHours', 'maxCashHours', 'percentageCashHours', 'cashRatePerHour', 'hasOtherConsiderations', 'note', 'niAdditions', 'niDeductions', 'cashAdditions', 'cashDeductions'].forEach(function (field) {
                       return delete updateData[field];
-                    }); // Update employee record
+                    }); // Update employee
 
                     _context9.next = 47;
                     return regeneratorRuntime.awrap(Employee.findOneAndUpdate({

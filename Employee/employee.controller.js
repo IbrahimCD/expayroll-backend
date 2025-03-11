@@ -1,4 +1,5 @@
 // backend/Employee/employee.controller.js
+
 const Employee = require('./employee.model');
 const Location = require('../Location/location.model');
 
@@ -11,33 +12,51 @@ exports.createEmployee = async (req, res) => {
     // Merge organizationId from the token into the payload:
     const payload = { ...req.body, organizationId: req.user.orgId };
 
-    // Process payStructure.dailyRates if provided (using the new nested structure)
-    if (payload.payStructure && payload.payStructure.dailyRates) {
-      const dr = payload.payStructure.dailyRates;
-      
-      // Process NI Daily Rates based on niDayMode
-      if (dr.niDayMode === 'NONE') {
-        dr.niRates = {
-          regularDays: 0,
-          regularDayRate: 0,
-          extraDayRate: 0,
-          extraShiftRate: 0
-        };
-      } else if (dr.niDayMode === 'FIXED') {
-        // Ensure niRates exists; then reset extra fields
-        dr.niRates = dr.niRates || {};
-        dr.niRates.extraDayRate = 0;
-        dr.niRates.extraShiftRate = 0;
+    // --- NEW: If payStructure provided, ensure otherConsiderations arrays exist. ---
+    if (payload.payStructure) {
+      // Process payStructure.dailyRates if provided (using your new nested structure)
+      if (payload.payStructure.dailyRates) {
+        const dr = payload.payStructure.dailyRates;
+
+        // Process NI Daily Rates based on niDayMode
+        if (dr.niDayMode === 'NONE') {
+          dr.niRates = {
+            regularDays: 0,
+            regularDayRate: 0,
+            extraDayRate: 0,
+            extraShiftRate: 0
+          };
+        } else if (dr.niDayMode === 'FIXED') {
+          dr.niRates = dr.niRates || {};
+          dr.niRates.extraDayRate = 0;
+          dr.niRates.extraShiftRate = 0;
+        }
+
+        // Process Cash Daily Rates based on cashDayMode
+        if (dr.cashDayMode === 'NONE') {
+          dr.cashRates = {
+            regularDays: 0,
+            regularDayRate: 0,
+            extraDayRate: 0,
+            extraShiftRate: 0
+          };
+        }
       }
-      
-      // Process Cash Daily Rates based on cashDayMode
-      if (dr.cashDayMode === 'NONE') {
-        dr.cashRates = {
-          regularDays: 0,
-          regularDayRate: 0,
-          extraDayRate: 0,
-          extraShiftRate: 0
-        };
+
+      // --- Make sure otherConsiderations is well-formed if hasOtherConsiderations is true ---
+      if (payload.payStructure.hasOtherConsiderations) {
+        if (!payload.payStructure.otherConsiderations) {
+          payload.payStructure.otherConsiderations = {};
+        }
+        // Default arrays if not provided
+        payload.payStructure.otherConsiderations.niAdditions =
+          payload.payStructure.otherConsiderations.niAdditions || [];
+        payload.payStructure.otherConsiderations.niDeductions =
+          payload.payStructure.otherConsiderations.niDeductions || [];
+        payload.payStructure.otherConsiderations.cashAdditions =
+          payload.payStructure.otherConsiderations.cashAdditions || [];
+        payload.payStructure.otherConsiderations.cashDeductions =
+          payload.payStructure.otherConsiderations.cashDeductions || [];
       }
     }
 
@@ -54,11 +73,6 @@ exports.createEmployee = async (req, res) => {
 
 /**
  * Get employees with search, filtering, and pagination.
- * Query parameters:
- *   - search: text to search in firstName, lastName, preferredName
- *   - status: filter by employee status
- *   - page: page number (default 1)
- *   - limit: number of items per page (default 20)
  */
 exports.getEmployees = async (req, res) => {
   try {
@@ -113,32 +127,49 @@ exports.updateEmployee = async (req, res) => {
     const { employeeId } = req.params;
     const updates = req.body;
     
-    // Process dailyRates update if present using the new nested structure
-    if (updates.payStructure && updates.payStructure.dailyRates) {
-      const dr = updates.payStructure.dailyRates;
-      
-      // Process NI Daily Rates based on niDayMode
-      if (dr.niDayMode === 'NONE') {
-        dr.niRates = {
-          regularDays: 0,
-          regularDayRate: 0,
-          extraDayRate: 0,
-          extraShiftRate: 0
-        };
-      } else if (dr.niDayMode === 'FIXED') {
-        dr.niRates = dr.niRates || {};
-        dr.niRates.extraDayRate = 0;
-        dr.niRates.extraShiftRate = 0;
+    // --- If payStructure present, do dailyRates logic + ensure otherConsiderations arrays. ---
+    if (updates.payStructure) {
+      if (updates.payStructure.dailyRates) {
+        const dr = updates.payStructure.dailyRates;
+
+        // NI Daily Rates
+        if (dr.niDayMode === 'NONE') {
+          dr.niRates = {
+            regularDays: 0,
+            regularDayRate: 0,
+            extraDayRate: 0,
+            extraShiftRate: 0
+          };
+        } else if (dr.niDayMode === 'FIXED') {
+          dr.niRates = dr.niRates || {};
+          dr.niRates.extraDayRate = 0;
+          dr.niRates.extraShiftRate = 0;
+        }
+
+        // Cash Daily Rates
+        if (dr.cashDayMode === 'NONE') {
+          dr.cashRates = {
+            regularDays: 0,
+            regularDayRate: 0,
+            extraDayRate: 0,
+            extraShiftRate: 0
+          };
+        }
       }
-      
-      // Process Cash Daily Rates based on cashDayMode
-      if (dr.cashDayMode === 'NONE') {
-        dr.cashRates = {
-          regularDays: 0,
-          regularDayRate: 0,
-          extraDayRate: 0,
-          extraShiftRate: 0
-        };
+
+      // If hasOtherConsiderations, ensure arrays exist
+      if (updates.payStructure.hasOtherConsiderations) {
+        if (!updates.payStructure.otherConsiderations) {
+          updates.payStructure.otherConsiderations = {};
+        }
+        updates.payStructure.otherConsiderations.niAdditions =
+          updates.payStructure.otherConsiderations.niAdditions || [];
+        updates.payStructure.otherConsiderations.niDeductions =
+          updates.payStructure.otherConsiderations.niDeductions || [];
+        updates.payStructure.otherConsiderations.cashAdditions =
+          updates.payStructure.otherConsiderations.cashAdditions || [];
+        updates.payStructure.otherConsiderations.cashDeductions =
+          updates.payStructure.otherConsiderations.cashDeductions || [];
       }
     }
 
@@ -173,11 +204,10 @@ exports.deleteEmployee = async (req, res) => {
   }
 };
 
-// Batch Create Employees
-/**
- * Batch create employees.
- * Expects req.body.employees to be an array of employee objects parsed from CSV.
- */
+// ------------------------------------
+// Batch Create / Batch Update
+// ------------------------------------
+
 const locationCache = {}; // { [locationCode]: ObjectId }
 
 async function getLocationIdByCode(orgId, code) {
@@ -193,9 +223,10 @@ async function getLocationIdByCode(orgId, code) {
   locationCache[trimmedCode] = loc._id;
   return loc._id;
 }
+
+// Helper to parse "Name:amount;Name2:amount2" into array
 function parsePairs(str) {
   if (!str) return [];
-  // Expecting "Name1:5;Name2:10" style strings
   return str.split(';').map((item) => {
     const [rawName, rawAmt] = item.split(':');
     return {
@@ -205,6 +236,10 @@ function parsePairs(str) {
   });
 }
 
+/**
+ * Batch create employees.
+ * Expects req.body.employees to be an array of employee objects parsed from CSV.
+ */
 exports.batchCreateEmployees = async (req, res) => {
   try {
     const orgId = req.user.orgId;
@@ -212,15 +247,17 @@ exports.batchCreateEmployees = async (req, res) => {
     if (!employees || !Array.isArray(employees)) {
       return res.status(400).json({ message: 'Invalid employees data.' });
     }
+
     const createdEmployees = [];
     for (const empData of employees) {
-      // Set organizationId for each employee record
       empData.organizationId = orgId;
 
+      // Convert baseLocationId from code to ObjectId
       if (empData.baseLocationId) {
         const locId = await getLocationIdByCode(orgId, empData.baseLocationId);
         empData.baseLocationId = locId;
       }
+      // Convert locationAccess from codes to ObjectIds
       if (empData.locationAccess && typeof empData.locationAccess === 'string') {
         const codes = empData.locationAccess.split(';').map(s => s.trim()).filter(Boolean);
         const accessIds = [];
@@ -230,6 +267,8 @@ exports.batchCreateEmployees = async (req, res) => {
         }
         empData.locationAccess = accessIds;
       }
+
+      // Convert string booleans
       if (typeof empData.hasDailyRates === 'string') {
         empData.hasDailyRates = empData.hasDailyRates.toLowerCase() === 'true';
       }
@@ -239,6 +278,8 @@ exports.batchCreateEmployees = async (req, res) => {
       if (typeof empData.hasOtherConsiderations === 'string') {
         empData.hasOtherConsiderations = empData.hasOtherConsiderations.toLowerCase() === 'true';
       }
+
+      // Build payStructure
       empData.payStructure = {
         payStructureName: empData.payStructureName || '',
         hasDailyRates: empData.hasDailyRates,
@@ -268,10 +309,7 @@ exports.batchCreateEmployees = async (req, res) => {
           percentageCashHours: Number(empData.percentageCashHours) || 0,
           cashRatePerHour: Number(empData.cashRatePerHour) || 0,
         },
-        
-      
-        
-        // In batchCreateEmployees or batchUpdateEmployees:
+        hasOtherConsiderations: empData.hasOtherConsiderations,
         otherConsiderations: {
           note: empData.note || '',
           niAdditions: parsePairs(empData.niAdditions),
@@ -279,7 +317,6 @@ exports.batchCreateEmployees = async (req, res) => {
           cashAdditions: parsePairs(empData.cashAdditions),
           cashDeductions: parsePairs(empData.cashDeductions)
         }
-        
       };
 
       // Remove flat fields so they aren’t duplicated in the payload
@@ -290,7 +327,7 @@ exports.batchCreateEmployees = async (req, res) => {
         'hasHourlyRates','niHoursMode','minNiHours','maxNiHours',
         'percentageNiHours','niRatePerHour','fixedNiHours','cashHoursMode',
         'minCashHours','maxCashHours','percentageCashHours','cashRatePerHour',
-        'hasOtherConsiderations','note'
+        'hasOtherConsiderations','note','niAdditions','niDeductions','cashAdditions','cashDeductions'
       ].forEach(field => delete empData[field]);
 
       const newEmp = await Employee.create(empData);
@@ -313,8 +350,8 @@ exports.batchCreateEmployees = async (req, res) => {
 
 /**
  * Batch Update Employees.
- * Expects req.body.employees to be an array of employee objects (e.g., parsed from a CSV)
- * Each object must include an "employeeId" field (the unique identifier) and the fields to update.
+ * Expects req.body.employees to be an array of employee objects
+ * Each object must include an "employeeId" field and the fields to update.
  */
 exports.batchUpdateEmployees = async (req, res) => {
   try {
@@ -347,7 +384,7 @@ exports.batchUpdateEmployees = async (req, res) => {
         updateData.locationAccess = accessIds;
       }
 
-      // Convert string booleans to actual booleans
+      // Convert string booleans
       if (typeof updateData.hasDailyRates === 'string') {
         updateData.hasDailyRates = updateData.hasDailyRates.toLowerCase() === 'true';
       }
@@ -358,7 +395,7 @@ exports.batchUpdateEmployees = async (req, res) => {
         updateData.hasOtherConsiderations = updateData.hasOtherConsiderations.toLowerCase() === 'true';
       }
 
-      // Nest pay structure fields if any related field is present
+      // If pay structure fields exist, nest them
       if (
         updateData.payStructureName ||
         updateData.niDayMode ||
@@ -384,7 +421,11 @@ exports.batchUpdateEmployees = async (req, res) => {
         updateData.percentageCashHours ||
         updateData.cashRatePerHour ||
         updateData.hasOtherConsiderations ||
-        updateData.note
+        updateData.note ||
+        updateData.niAdditions ||
+        updateData.niDeductions ||
+        updateData.cashAdditions ||
+        updateData.cashDeductions
       ) {
         updateData.payStructure = {
           payStructureName: updateData.payStructureName || '',
@@ -418,15 +459,15 @@ exports.batchUpdateEmployees = async (req, res) => {
           hasOtherConsiderations: updateData.hasOtherConsiderations,
           otherConsiderations: {
             note: updateData.note || '',
-            niAdditions: [],
-            niDeductions: [],
-            cashAdditions: [],
-            cashDeductions: [],
+            niAdditions: parsePairs(updateData.niAdditions),
+            niDeductions: parsePairs(updateData.niDeductions),
+            cashAdditions: parsePairs(updateData.cashAdditions),
+            cashDeductions: parsePairs(updateData.cashDeductions),
           }
         };
       }
 
-      // Remove flat fields to avoid duplication
+      // Remove flat fields so they won’t be duplicated
       [
         'payStructureName','niDayMode','ni_regularDays','ni_regularDayRate',
         'ni_extraDayRate','ni_extraShiftRate','cashDayMode','cash_regularDays',
@@ -434,10 +475,10 @@ exports.batchUpdateEmployees = async (req, res) => {
         'hasHourlyRates','niHoursMode','minNiHours','maxNiHours',
         'percentageNiHours','niRatePerHour','fixedNiHours','cashHoursMode',
         'minCashHours','maxCashHours','percentageCashHours','cashRatePerHour',
-        'hasOtherConsiderations','note'
+        'hasOtherConsiderations','note','niAdditions','niDeductions','cashAdditions','cashDeductions'
       ].forEach(field => delete updateData[field]);
 
-      // Update employee record
+      // Update employee
       const updatedEmp = await Employee.findOneAndUpdate(
         { _id: updateData.employeeId, organizationId: orgId },
         { $set: updateData },
