@@ -228,13 +228,22 @@ async function getLocationIdByCode(orgId, code) {
 function parsePairs(str) {
   if (!str) return [];
   return str.split(';').map((item) => {
-    const [rawName, rawAmt] = item.split(':');
-    return {
-      name: (rawName || '').trim(),
-      amount: Number(rawAmt) || 0
-    };
+    if (item.includes(':')) {
+      const [rawName, rawAmt] = item.split(':');
+      return {
+        name: (rawName || '').trim(),
+        amount: Number(rawAmt) || 0
+      };
+    } else {
+      // No colon found: treat the whole item as the amount.
+      return {
+        name: '', // or you could set a default like 'Other'
+        amount: Number(item) || 0
+      };
+    }
   });
 }
+
 
 /**
  * Batch create employees.

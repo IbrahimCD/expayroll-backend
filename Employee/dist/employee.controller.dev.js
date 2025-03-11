@@ -438,15 +438,24 @@ function getLocationIdByCode(orgId, code) {
 function parsePairs(str) {
   if (!str) return [];
   return str.split(';').map(function (item) {
-    var _item$split = item.split(':'),
-        _item$split2 = _slicedToArray(_item$split, 2),
-        rawName = _item$split2[0],
-        rawAmt = _item$split2[1];
+    if (item.includes(':')) {
+      var _item$split = item.split(':'),
+          _item$split2 = _slicedToArray(_item$split, 2),
+          rawName = _item$split2[0],
+          rawAmt = _item$split2[1];
 
-    return {
-      name: (rawName || '').trim(),
-      amount: Number(rawAmt) || 0
-    };
+      return {
+        name: (rawName || '').trim(),
+        amount: Number(rawAmt) || 0
+      };
+    } else {
+      // No colon found: treat the whole item as the amount.
+      return {
+        name: '',
+        // or you could set a default like 'Other'
+        amount: Number(item) || 0
+      };
+    }
   });
 }
 /**
