@@ -203,6 +203,9 @@ exports.batchCreateEmployees = async (req, res) => {
     }
     const createdEmployees = [];
     for (const empData of employees) {
+      // Set organizationId for each employee record
+      empData.organizationId = orgId;
+
       if (empData.baseLocationId) {
         const locId = await getLocationIdByCode(orgId, empData.baseLocationId);
         empData.baseLocationId = locId;
@@ -264,6 +267,7 @@ exports.batchCreateEmployees = async (req, res) => {
         }
       };
 
+      // Remove flat fields so they aren’t duplicated in the payload
       [
         'payStructureName','niDayMode','ni_regularDays','ni_regularDayRate',
         'ni_extraDayRate','ni_extraShiftRate','cashDayMode','cash_regularDays',
@@ -284,11 +288,13 @@ exports.batchCreateEmployees = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in batch creating employees:', error);
-    return res
-      .status(500)
-      .json({ message: 'Error in batch creating employees', error: error.message });
+    return res.status(500).json({
+      message: 'Error in batch creating employees',
+      error: error.message
+    });
   }
 };
+
 
 /**
  * Batch Update Employees.

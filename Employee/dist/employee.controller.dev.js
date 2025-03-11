@@ -448,22 +448,24 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                 switch (_context7.prev = _context7.next) {
                   case 0:
                     empData = _step.value;
+                    // Set organizationId for each employee record
+                    empData.organizationId = orgId;
 
                     if (!empData.baseLocationId) {
-                      _context7.next = 6;
+                      _context7.next = 7;
                       break;
                     }
 
-                    _context7.next = 4;
+                    _context7.next = 5;
                     return regeneratorRuntime.awrap(getLocationIdByCode(orgId, empData.baseLocationId));
 
-                  case 4:
+                  case 5:
                     locId = _context7.sent;
                     empData.baseLocationId = locId;
 
-                  case 6:
+                  case 7:
                     if (!(empData.locationAccess && typeof empData.locationAccess === 'string')) {
-                      _context7.next = 38;
+                      _context7.next = 39;
                       break;
                     }
 
@@ -474,66 +476,66 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                     _iteratorNormalCompletion2 = true;
                     _didIteratorError2 = false;
                     _iteratorError2 = undefined;
-                    _context7.prev = 12;
+                    _context7.prev = 13;
                     _iterator2 = codes[Symbol.iterator]();
 
-                  case 14:
+                  case 15:
                     if (_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done) {
-                      _context7.next = 23;
+                      _context7.next = 24;
                       break;
                     }
 
                     code = _step2.value;
-                    _context7.next = 18;
+                    _context7.next = 19;
                     return regeneratorRuntime.awrap(getLocationIdByCode(orgId, code));
 
-                  case 18:
+                  case 19:
                     _locId = _context7.sent;
                     accessIds.push(_locId);
 
-                  case 20:
+                  case 21:
                     _iteratorNormalCompletion2 = true;
-                    _context7.next = 14;
+                    _context7.next = 15;
                     break;
 
-                  case 23:
-                    _context7.next = 29;
+                  case 24:
+                    _context7.next = 30;
                     break;
 
-                  case 25:
-                    _context7.prev = 25;
-                    _context7.t0 = _context7["catch"](12);
+                  case 26:
+                    _context7.prev = 26;
+                    _context7.t0 = _context7["catch"](13);
                     _didIteratorError2 = true;
                     _iteratorError2 = _context7.t0;
 
-                  case 29:
-                    _context7.prev = 29;
+                  case 30:
                     _context7.prev = 30;
+                    _context7.prev = 31;
 
                     if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
                       _iterator2["return"]();
                     }
 
-                  case 32:
-                    _context7.prev = 32;
+                  case 33:
+                    _context7.prev = 33;
 
                     if (!_didIteratorError2) {
-                      _context7.next = 35;
+                      _context7.next = 36;
                       break;
                     }
 
                     throw _iteratorError2;
 
-                  case 35:
-                    return _context7.finish(32);
-
                   case 36:
-                    return _context7.finish(29);
+                    return _context7.finish(33);
 
                   case 37:
-                    empData.locationAccess = accessIds;
+                    return _context7.finish(30);
 
                   case 38:
+                    empData.locationAccess = accessIds;
+
+                  case 39:
                     if (typeof empData.hasDailyRates === 'string') {
                       empData.hasDailyRates = empData.hasDailyRates.toLowerCase() === 'true';
                     }
@@ -583,23 +585,24 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                         cashAdditions: [],
                         cashDeductions: []
                       }
-                    };
+                    }; // Remove flat fields so they aren’t duplicated in the payload
+
                     ['payStructureName', 'niDayMode', 'ni_regularDays', 'ni_regularDayRate', 'ni_extraDayRate', 'ni_extraShiftRate', 'cashDayMode', 'cash_regularDays', 'cash_regularDayRate', 'cash_extraDayRate', 'cash_extraShiftRate', 'hasHourlyRates', 'niHoursMode', 'minNiHours', 'maxNiHours', 'percentageNiHours', 'niRatePerHour', 'fixedNiHours', 'cashHoursMode', 'minCashHours', 'maxCashHours', 'percentageCashHours', 'cashRatePerHour', 'hasOtherConsiderations', 'note'].forEach(function (field) {
                       return delete empData[field];
                     });
-                    _context7.next = 45;
+                    _context7.next = 46;
                     return regeneratorRuntime.awrap(Employee.create(empData));
 
-                  case 45:
+                  case 46:
                     newEmp = _context7.sent;
                     createdEmployees.push(newEmp);
 
-                  case 47:
+                  case 48:
                   case "end":
                     return _context7.stop();
                 }
               }
-            }, null, null, [[12, 25, 29, 37], [30,, 32, 36]]);
+            }, null, null, [[13, 26, 30, 38], [31,, 33, 37]]);
           };
 
           _iterator = employees[Symbol.iterator]();
