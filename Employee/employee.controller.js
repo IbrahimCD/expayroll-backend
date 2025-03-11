@@ -193,6 +193,17 @@ async function getLocationIdByCode(orgId, code) {
   locationCache[trimmedCode] = loc._id;
   return loc._id;
 }
+function parsePairs(str) {
+  if (!str) return [];
+  // Expecting "Name1:5;Name2:10" style strings
+  return str.split(';').map((item) => {
+    const [rawName, rawAmt] = item.split(':');
+    return {
+      name: (rawName || '').trim(),
+      amount: Number(rawAmt) || 0
+    };
+  });
+}
 
 exports.batchCreateEmployees = async (req, res) => {
   try {
@@ -257,14 +268,18 @@ exports.batchCreateEmployees = async (req, res) => {
           percentageCashHours: Number(empData.percentageCashHours) || 0,
           cashRatePerHour: Number(empData.cashRatePerHour) || 0,
         },
-        hasOtherConsiderations: empData.hasOtherConsiderations,
+        
+      
+        
+        // In batchCreateEmployees or batchUpdateEmployees:
         otherConsiderations: {
           note: empData.note || '',
-          niAdditions: [],
-          niDeductions: [],
-          cashAdditions: [],
-          cashDeductions: [],
+          niAdditions: parsePairs(empData.niAdditions),
+          niDeductions: parsePairs(empData.niDeductions),
+          cashAdditions: parsePairs(empData.cashAdditions),
+          cashDeductions: parsePairs(empData.cashDeductions)
         }
+        
       };
 
       // Remove flat fields so they aren’t duplicated in the payload

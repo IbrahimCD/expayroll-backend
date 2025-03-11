@@ -413,6 +413,22 @@ function getLocationIdByCode(orgId, code) {
   });
 }
 
+function parsePairs(str) {
+  if (!str) return []; // Expecting "Name1:5;Name2:10" style strings
+
+  return str.split(';').map(function (item) {
+    var _item$split = item.split(':'),
+        _item$split2 = _slicedToArray(_item$split, 2),
+        rawName = _item$split2[0],
+        rawAmt = _item$split2[1];
+
+    return {
+      name: (rawName || '').trim(),
+      amount: Number(rawAmt) || 0
+    };
+  });
+}
+
 exports.batchCreateEmployees = function _callee6(req, res) {
   var orgId, employees, createdEmployees, _iteratorNormalCompletion, _didIteratorError, _iteratorError, _loop, _iterator, _step;
 
@@ -577,13 +593,13 @@ exports.batchCreateEmployees = function _callee6(req, res) {
                         percentageCashHours: Number(empData.percentageCashHours) || 0,
                         cashRatePerHour: Number(empData.cashRatePerHour) || 0
                       },
-                      hasOtherConsiderations: empData.hasOtherConsiderations,
+                      // In batchCreateEmployees or batchUpdateEmployees:
                       otherConsiderations: {
                         note: empData.note || '',
-                        niAdditions: [],
-                        niDeductions: [],
-                        cashAdditions: [],
-                        cashDeductions: []
+                        niAdditions: parsePairs(empData.niAdditions),
+                        niDeductions: parsePairs(empData.niDeductions),
+                        cashAdditions: parsePairs(empData.cashAdditions),
+                        cashDeductions: parsePairs(empData.cashDeductions)
                       }
                     }; // Remove flat fields so they aren’t duplicated in the payload
 
