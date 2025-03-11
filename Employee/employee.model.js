@@ -54,9 +54,9 @@ const payStructureSchema = new Schema({
 
 // Employee Schema
 const employeeSchema = new Schema({
-  firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
-  preferredName: { type: String },
+  firstName: { type: String, required: true, index:true },
+  lastName: { type: String, required: true, index:true },
+  preferredName: { type: String, index:true },
   gender: { type: String, default: 'Other' },
   dateOfBirth: { type: Date },
   mobileNo: { type: String },
@@ -64,9 +64,9 @@ const employeeSchema = new Schema({
   address: { type: String },
   payrollId: { type: String },
   status: { type: String, default: 'Employed' },
-  baseLocationId: { type: Schema.Types.ObjectId, ref: 'Location' },
+  baseLocationId: { type: Schema.Types.ObjectId, ref: 'Location' , index:true},
   locationAccess: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
-  organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
+  organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index:true },
   payStructure: payStructureSchema
 }, { timestamps: true });
 

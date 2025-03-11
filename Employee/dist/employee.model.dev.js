@@ -154,14 +154,17 @@ var payStructureSchema = new Schema({
 var employeeSchema = new Schema({
   firstName: {
     type: String,
-    required: true
+    required: true,
+    index: true
   },
   lastName: {
     type: String,
-    required: true
+    required: true,
+    index: true
   },
   preferredName: {
-    type: String
+    type: String,
+    index: true
   },
   gender: {
     type: String,
@@ -190,7 +193,8 @@ var employeeSchema = new Schema({
   },
   baseLocationId: {
     type: Schema.Types.ObjectId,
-    ref: 'Location'
+    ref: 'Location',
+    index: true
   },
   locationAccess: [{
     type: Schema.Types.ObjectId,
@@ -199,7 +203,8 @@ var employeeSchema = new Schema({
   organizationId: {
     type: Schema.Types.ObjectId,
     ref: 'Organization',
-    required: true
+    required: true,
+    index: true
   },
   payStructure: payStructureSchema
 }, {

@@ -1,77 +1,134 @@
+// backend/Reports/employeeWageReport.controller.js
+const { ObjectId } = require('mongoose').Types;
 const PayRun = require('../payRun/payRun.model');
 const Employee = require('../Employee/employee.model');
 const Location = require('../Location/location.model');
 
 exports.generateEmployeeWageReport = async (req, res) => {
   try {
-    const { payRunId } = req.query;
+    const {
+      payRunId,
+      searchName = '',
+      baseLocations = '', // comma-separated list e.g. "LR,DAR"
+      orderBy = 'firstName',
+      orderDirection = 'asc',
+      page = 1,
+      limit = 50
+    } = req.query;
     const { orgId } = req.user;
     if (!payRunId) {
       return res.status(400).json({ message: 'Missing payRunId in query parameters.' });
     }
-    // Fetch the selected Pay Run
-    const payRun = await PayRun.findOne({ _id: payRunId, organizationId: orgId });
-    if (!payRun) {
-      return res.status(404).json({ message: 'Pay Run not found.' });
-    }
-    const reportRows = [];
-    // Loop through each pay run entry
-    for (const entry of payRun.entries) {
-      // Fetch the employee document
-      const employee = await Employee.findById(entry.employeeId);
-      let firstName = '', lastName = '';
-      if (employee) {
-        firstName = employee.firstName || '';
-        lastName = employee.lastName || '';
-      } else if (entry.employeeName) {
-        const parts = entry.employeeName.split(' ');
-        firstName = parts[0];
-        lastName = parts.slice(1).join(' ');
-      }
-      const payrollId = entry.payrollId || '';
 
-      // Determine baseLocation:
-      // If the pay run entry already has a baseLocation value, use it.
-      // Otherwise, if the employee exists and has a baseLocationId, look it up in the Location collection.
-      let baseLocation = entry.baseLocation || '';
-      if (!baseLocation && employee && employee.baseLocationId) {
-        const loc = await Location.findById(employee.baseLocationId);
-        baseLocation = loc ? loc.name : '';
-      }
-
-      // Extract computed fields from the pay run entry's breakdown.
-      const breakdown = entry.breakdown || {};
-      const niDayWage = breakdown.E9_NIDaysWage || 0;
-      const niHoursUsed = breakdown.E13_NIHoursUsed || 0;
-      const netNIWage = breakdown.E21_netNIWage || 0;
-      const netCashWage = breakdown.E22_netCashWage || 0;
-
-      // Get NI Regular Day Rate and NI Hours Rate from employee pay structure.
-      let niRegularDayRate = 0;
-      let niHoursRate = 0;
-      if (employee && employee.payStructure) {
-        if (employee.payStructure.dailyRates) {
-          niRegularDayRate = employee.payStructure.dailyRates.ni_regularDayRate || 0;
+    // Build the aggregation pipeline
+    const pipeline = [
+      // Match the correct pay run document for the organization.
+      { $match: { _id: ObjectId(payRunId), organizationId: orgId } },
+      // Unwind the entries array to work on each entry separately.
+      { $unwind: "$entries" },
+      // Lookup the Employee document for each entry.
+      {
+        $lookup: {
+          from: "employees", // collection name in MongoDB
+          localField: "entries.employeeId",
+          foreignField: "_id",
+          as: "employee"
         }
-        if (employee.payStructure.hourlyRates) {
-          niHoursRate = employee.payStructure.hourlyRates.niRatePerHour || 0;
+      },
+      { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
+      // Lookup the Location (if needed) from the employee's baseLocationId.
+      {
+        $lookup: {
+          from: "locations",
+          localField: "employee.baseLocationId",
+          foreignField: "_id",
+          as: "location"
+        }
+      },
+      { $unwind: { path: "$location", preserveNullAndEmptyArrays: true } },
+      // Project the fields needed for the report.
+      {
+        $project: {
+          // Use employee data if available; otherwise, try splitting entry.employeeName.
+          firstName: {
+            $cond: [
+              { $ifNull: [ "$employee.firstName", false ] },
+              "$employee.firstName",
+              { $arrayElemAt: [ { $split: [ "$entries.employeeName", " " ] }, 0 ] }
+            ]
+          },
+          lastName: {
+            $cond: [
+              { $ifNull: [ "$employee.lastName", false ] },
+              "$employee.lastName",
+              {
+                $trim: {
+                  input: {
+                    $reduce: {
+                      input: { $slice: [ { $split: [ "$entries.employeeName", " " ] }, 1, { $size: { $split: [ "$entries.employeeName", " " ] } } ] },
+                      initialValue: "",
+                      in: { $concat: [ "$$value", " ", "$$this" ] }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          payrollId: "$entries.payrollId",
+          // Use the entry's baseLocation if provided; else use the lookup location name.
+          baseLocation: {
+            $cond: [
+              { $ifNull: [ "$entries.baseLocation", false ] },
+              "$entries.baseLocation",
+              "$location.name"
+            ]
+          },
+          niDayWage: "$entries.breakdown.E9_NIDaysWage",
+          niHoursUsed: "$entries.breakdown.E13_NIHoursUsed",
+          netNIWage: "$entries.breakdown.E21_netNIWage",
+          netCashWage: "$entries.breakdown.E22_netCashWage",
+          // Get rates from the employee document if available.
+          niRegularDayRate: "$employee.payStructure.dailyRates.ni_regularDayRate",
+          niHoursRate: "$employee.payStructure.hourlyRates.niRatePerHour"
         }
       }
+    ];
 
-      reportRows.push({
-        firstName,
-        lastName,
-        payrollId,
-        baseLocation,
-        niDayWage,
-        niRegularDayRate,
-        niHoursUsed,
-        niHoursRate,
-        netNIWage,
-        netCashWage
+    // Client‑side filters:
+
+    // Filter by name (searchName matches firstName or lastName)
+    if (searchName) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { firstName: { $regex: searchName, $options: 'i' } },
+            { lastName: { $regex: searchName, $options: 'i' } }
+          ]
+        }
       });
     }
 
+    // Filter by baseLocations (if provided as comma‑separated values)
+    if (baseLocations) {
+      const locArray = baseLocations.split(',').map((loc) => loc.trim()).filter(Boolean);
+      if (locArray.length > 0) {
+        pipeline.push({
+          $match: { baseLocation: { $in: locArray } }
+        });
+      }
+    }
+
+    // Sorting stage:
+    const sortOrder = orderDirection === 'asc' ? 1 : -1;
+    pipeline.push({ $sort: { [orderBy]: sortOrder } });
+
+    // Pagination: skip and limit.
+    const skip = (Number(page) - 1) * Number(limit);
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: Number(limit) });
+
+    // Run the aggregation pipeline on the PayRun collection.
+    const reportRows = await PayRun.aggregate(pipeline);
     return res.status(200).json({ report: reportRows });
   } catch (error) {
     console.error('Error generating employee wage report:', error);
