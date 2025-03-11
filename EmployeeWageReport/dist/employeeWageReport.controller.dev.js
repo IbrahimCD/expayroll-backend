@@ -1,10 +1,5 @@
 "use strict";
 
-function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-
-// backend/Reports/employeeWageReport.controller.js
-var ObjectId = require('mongoose').Types.ObjectId;
-
 var PayRun = require('../payRun/payRun.model');
 
 var Employee = require('../Employee/employee.model');
@@ -12,14 +7,14 @@ var Employee = require('../Employee/employee.model');
 var Location = require('../Location/location.model');
 
 exports.generateEmployeeWageReport = function _callee(req, res) {
-  var _req$query, payRunId, _req$query$searchName, searchName, _req$query$baseLocati, baseLocations, _req$query$orderBy, orderBy, _req$query$orderDirec, orderDirection, _req$query$page, page, _req$query$limit, limit, orgId, pipeline, locArray, sortOrder, skip, reportRows;
+  var payRunId, orgId, payRun, reportRows, _iteratorNormalCompletion, _didIteratorError, _iteratorError, _iterator, _step, entry, employee, firstName, lastName, parts, payrollId, baseLocation, loc, breakdown, niDayWage, niHoursUsed, netNIWage, netCashWage, niRegularDayRate, niHoursRate;
 
   return regeneratorRuntime.async(function _callee$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
         case 0:
           _context.prev = 0;
-          _req$query = req.query, payRunId = _req$query.payRunId, _req$query$searchName = _req$query.searchName, searchName = _req$query$searchName === void 0 ? '' : _req$query$searchName, _req$query$baseLocati = _req$query.baseLocations, baseLocations = _req$query$baseLocati === void 0 ? '' : _req$query$baseLocati, _req$query$orderBy = _req$query.orderBy, orderBy = _req$query$orderBy === void 0 ? 'firstName' : _req$query$orderBy, _req$query$orderDirec = _req$query.orderDirection, orderDirection = _req$query$orderDirec === void 0 ? 'asc' : _req$query$orderDirec, _req$query$page = _req$query.page, page = _req$query$page === void 0 ? 1 : _req$query$page, _req$query$limit = _req$query.limit, limit = _req$query$limit === void 0 ? 50 : _req$query$limit;
+          payRunId = req.query.payRunId;
           orgId = req.user.orgId;
 
           if (payRunId) {
@@ -32,169 +27,164 @@ exports.generateEmployeeWageReport = function _callee(req, res) {
           }));
 
         case 5:
-          // Build the aggregation pipeline
-          pipeline = [// Match the correct pay run document for the organization.
-          {
-            $match: {
-              _id: ObjectId(payRunId),
-              organizationId: orgId
-            }
-          }, // Unwind the entries array to work on each entry separately.
-          {
-            $unwind: "$entries"
-          }, // Lookup the Employee document for each entry.
-          {
-            $lookup: {
-              from: "employees",
-              // collection name in MongoDB
-              localField: "entries.employeeId",
-              foreignField: "_id",
-              as: "employee"
-            }
-          }, {
-            $unwind: {
-              path: "$employee",
-              preserveNullAndEmptyArrays: true
-            }
-          }, // Lookup the Location (if needed) from the employee's baseLocationId.
-          {
-            $lookup: {
-              from: "locations",
-              localField: "employee.baseLocationId",
-              foreignField: "_id",
-              as: "location"
-            }
-          }, {
-            $unwind: {
-              path: "$location",
-              preserveNullAndEmptyArrays: true
-            }
-          }, // Project the fields needed for the report.
-          {
-            $project: {
-              // Use employee data if available; otherwise, try splitting entry.employeeName.
-              firstName: {
-                $cond: [{
-                  $ifNull: ["$employee.firstName", false]
-                }, "$employee.firstName", {
-                  $arrayElemAt: [{
-                    $split: ["$entries.employeeName", " "]
-                  }, 0]
-                }]
-              },
-              lastName: {
-                $cond: [{
-                  $ifNull: ["$employee.lastName", false]
-                }, "$employee.lastName", {
-                  $trim: {
-                    input: {
-                      $reduce: {
-                        input: {
-                          $slice: [{
-                            $split: ["$entries.employeeName", " "]
-                          }, 1, {
-                            $size: {
-                              $split: ["$entries.employeeName", " "]
-                            }
-                          }]
-                        },
-                        initialValue: "",
-                        "in": {
-                          $concat: ["$$value", " ", "$$this"]
-                        }
-                      }
-                    }
-                  }
-                }]
-              },
-              payrollId: "$entries.payrollId",
-              // Use the entry's baseLocation if provided; else use the lookup location name.
-              baseLocation: {
-                $cond: [{
-                  $ifNull: ["$entries.baseLocation", false]
-                }, "$entries.baseLocation", "$location.name"]
-              },
-              niDayWage: "$entries.breakdown.E9_NIDaysWage",
-              niHoursUsed: "$entries.breakdown.E13_NIHoursUsed",
-              netNIWage: "$entries.breakdown.E21_netNIWage",
-              netCashWage: "$entries.breakdown.E22_netCashWage",
-              // Get rates from the employee document if available.
-              niRegularDayRate: "$employee.payStructure.dailyRates.ni_regularDayRate",
-              niHoursRate: "$employee.payStructure.hourlyRates.niRatePerHour"
-            }
-          }]; // Client‑side filters:
-          // Filter by name (searchName matches firstName or lastName)
+          _context.next = 7;
+          return regeneratorRuntime.awrap(PayRun.findOne({
+            _id: payRunId,
+            organizationId: orgId
+          }));
 
-          if (searchName) {
-            pipeline.push({
-              $match: {
-                $or: [{
-                  firstName: {
-                    $regex: searchName,
-                    $options: 'i'
-                  }
-                }, {
-                  lastName: {
-                    $regex: searchName,
-                    $options: 'i'
-                  }
-                }]
-              }
-            });
-          } // Filter by baseLocations (if provided as comma‑separated values)
+        case 7:
+          payRun = _context.sent;
 
+          if (payRun) {
+            _context.next = 10;
+            break;
+          }
 
-          if (baseLocations) {
-            locArray = baseLocations.split(',').map(function (loc) {
-              return loc.trim();
-            }).filter(Boolean);
+          return _context.abrupt("return", res.status(404).json({
+            message: 'Pay Run not found.'
+          }));
 
-            if (locArray.length > 0) {
-              pipeline.push({
-                $match: {
-                  baseLocation: {
-                    $in: locArray
-                  }
-                }
-              });
+        case 10:
+          reportRows = []; // Loop through each pay run entry
+
+          _iteratorNormalCompletion = true;
+          _didIteratorError = false;
+          _iteratorError = undefined;
+          _context.prev = 14;
+          _iterator = payRun.entries[Symbol.iterator]();
+
+        case 16:
+          if (_iteratorNormalCompletion = (_step = _iterator.next()).done) {
+            _context.next = 42;
+            break;
+          }
+
+          entry = _step.value;
+          _context.next = 20;
+          return regeneratorRuntime.awrap(Employee.findById(entry.employeeId));
+
+        case 20:
+          employee = _context.sent;
+          firstName = '', lastName = '';
+
+          if (employee) {
+            firstName = employee.firstName || '';
+            lastName = employee.lastName || '';
+          } else if (entry.employeeName) {
+            parts = entry.employeeName.split(' ');
+            firstName = parts[0];
+            lastName = parts.slice(1).join(' ');
+          }
+
+          payrollId = entry.payrollId || ''; // Determine baseLocation:
+          // If the pay run entry already has a baseLocation value, use it.
+          // Otherwise, if the employee exists and has a baseLocationId, look it up in the Location collection.
+
+          baseLocation = entry.baseLocation || '';
+
+          if (!(!baseLocation && employee && employee.baseLocationId)) {
+            _context.next = 30;
+            break;
+          }
+
+          _context.next = 28;
+          return regeneratorRuntime.awrap(Location.findById(employee.baseLocationId));
+
+        case 28:
+          loc = _context.sent;
+          baseLocation = loc ? loc.name : '';
+
+        case 30:
+          // Extract computed fields from the pay run entry's breakdown.
+          breakdown = entry.breakdown || {};
+          niDayWage = breakdown.E9_NIDaysWage || 0;
+          niHoursUsed = breakdown.E13_NIHoursUsed || 0;
+          netNIWage = breakdown.E21_netNIWage || 0;
+          netCashWage = breakdown.E22_netCashWage || 0; // Get NI Regular Day Rate and NI Hours Rate from employee pay structure.
+
+          niRegularDayRate = 0;
+          niHoursRate = 0;
+
+          if (employee && employee.payStructure) {
+            if (employee.payStructure.dailyRates) {
+              niRegularDayRate = employee.payStructure.dailyRates.ni_regularDayRate || 0;
             }
-          } // Sorting stage:
 
+            if (employee.payStructure.hourlyRates) {
+              niHoursRate = employee.payStructure.hourlyRates.niRatePerHour || 0;
+            }
+          }
 
-          sortOrder = orderDirection === 'asc' ? 1 : -1;
-          pipeline.push({
-            $sort: _defineProperty({}, orderBy, sortOrder)
-          }); // Pagination: skip and limit.
-
-          skip = (Number(page) - 1) * Number(limit);
-          pipeline.push({
-            $skip: skip
+          reportRows.push({
+            firstName: firstName,
+            lastName: lastName,
+            payrollId: payrollId,
+            baseLocation: baseLocation,
+            niDayWage: niDayWage,
+            niRegularDayRate: niRegularDayRate,
+            niHoursUsed: niHoursUsed,
+            niHoursRate: niHoursRate,
+            netNIWage: netNIWage,
+            netCashWage: netCashWage
           });
-          pipeline.push({
-            $limit: Number(limit)
-          }); // Run the aggregation pipeline on the PayRun collection.
 
-          _context.next = 15;
-          return regeneratorRuntime.awrap(PayRun.aggregate(pipeline));
+        case 39:
+          _iteratorNormalCompletion = true;
+          _context.next = 16;
+          break;
 
-        case 15:
-          reportRows = _context.sent;
+        case 42:
+          _context.next = 48;
+          break;
+
+        case 44:
+          _context.prev = 44;
+          _context.t0 = _context["catch"](14);
+          _didIteratorError = true;
+          _iteratorError = _context.t0;
+
+        case 48:
+          _context.prev = 48;
+          _context.prev = 49;
+
+          if (!_iteratorNormalCompletion && _iterator["return"] != null) {
+            _iterator["return"]();
+          }
+
+        case 51:
+          _context.prev = 51;
+
+          if (!_didIteratorError) {
+            _context.next = 54;
+            break;
+          }
+
+          throw _iteratorError;
+
+        case 54:
+          return _context.finish(51);
+
+        case 55:
+          return _context.finish(48);
+
+        case 56:
           return _context.abrupt("return", res.status(200).json({
             report: reportRows
           }));
 
-        case 19:
-          _context.prev = 19;
-          _context.t0 = _context["catch"](0);
-          console.error('Error generating employee wage report:', _context.t0);
+        case 59:
+          _context.prev = 59;
+          _context.t1 = _context["catch"](0);
+          console.error('Error generating employee wage report:', _context.t1);
           return _context.abrupt("return", res.status(500).json({
             message: 'Server error generating employee wage report.'
           }));
 
-        case 23:
+        case 63:
         case "end":
           return _context.stop();
       }
     }
-  }, null, null, [[0, 19]]);
+  }, null, null, [[0, 59], [14, 44, 48, 56], [49,, 51, 55]]);
 };
