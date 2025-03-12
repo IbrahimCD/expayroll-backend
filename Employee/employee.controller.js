@@ -362,6 +362,11 @@ exports.batchCreateEmployees = async (req, res) => {
  * Expects req.body.employees to be an array of employee objects
  * Each object must include an "employeeId" field and the fields to update.
  */
+/**
+ * Batch Update Employees.
+ * Expects req.body.employees to be an array of employee objects.
+ * Each object must include an "employeeId" field and the fields to update.
+ */
 exports.batchUpdateEmployees = async (req, res) => {
   try {
     const orgId = req.user.orgId;
@@ -393,7 +398,7 @@ exports.batchUpdateEmployees = async (req, res) => {
         updateData.locationAccess = accessIds;
       }
 
-      // Convert string booleans
+      // Convert string booleans to actual booleans
       if (typeof updateData.hasDailyRates === 'string') {
         updateData.hasDailyRates = updateData.hasDailyRates.toLowerCase() === 'true';
       }
@@ -404,7 +409,7 @@ exports.batchUpdateEmployees = async (req, res) => {
         updateData.hasOtherConsiderations = updateData.hasOtherConsiderations.toLowerCase() === 'true';
       }
 
-      // If pay structure fields exist, nest them
+      // If any pay structure related fields exist, nest them into payStructure
       if (
         updateData.payStructureName ||
         updateData.niDayMode ||
@@ -476,7 +481,7 @@ exports.batchUpdateEmployees = async (req, res) => {
         };
       }
 
-      // Remove flat fields so they won’t be duplicated
+      // Remove flat fields so they won’t be duplicated in the payload
       [
         'payStructureName','niDayMode','ni_regularDays','ni_regularDayRate',
         'ni_extraDayRate','ni_extraShiftRate','cashDayMode','cash_regularDays',
@@ -487,7 +492,6 @@ exports.batchUpdateEmployees = async (req, res) => {
         'hasOtherConsiderations','note','niAdditions','niDeductions','cashAdditions','cashDeductions'
       ].forEach(field => delete updateData[field]);
 
-      // Update employee
       const updatedEmp = await Employee.findOneAndUpdate(
         { _id: updateData.employeeId, organizationId: orgId },
         { $set: updateData },

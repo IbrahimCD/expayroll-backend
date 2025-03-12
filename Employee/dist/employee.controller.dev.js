@@ -735,6 +735,12 @@ exports.batchCreateEmployees = function _callee6(req, res) {
  * Each object must include an "employeeId" field and the fields to update.
  */
 
+/**
+ * Batch Update Employees.
+ * Expects req.body.employees to be an array of employee objects.
+ * Each object must include an "employeeId" field and the fields to update.
+ */
+
 
 exports.batchUpdateEmployees = function _callee7(req, res) {
   var _orgId, employees, updatedEmployees, _iteratorNormalCompletion3, _didIteratorError3, _iteratorError3, _loop2, _iterator3, _step3;
@@ -865,7 +871,7 @@ exports.batchUpdateEmployees = function _callee7(req, res) {
                     updateData.locationAccess = accessIds;
 
                   case 40:
-                    // Convert string booleans
+                    // Convert string booleans to actual booleans
                     if (typeof updateData.hasDailyRates === 'string') {
                       updateData.hasDailyRates = updateData.hasDailyRates.toLowerCase() === 'true';
                     }
@@ -876,7 +882,7 @@ exports.batchUpdateEmployees = function _callee7(req, res) {
 
                     if (typeof updateData.hasOtherConsiderations === 'string') {
                       updateData.hasOtherConsiderations = updateData.hasOtherConsiderations.toLowerCase() === 'true';
-                    } // If pay structure fields exist, nest them
+                    } // If any pay structure related fields exist, nest them into payStructure
 
 
                     if (updateData.payStructureName || updateData.niDayMode || updateData.ni_regularDays || updateData.ni_regularDayRate || updateData.ni_extraDayRate || updateData.ni_extraShiftRate || updateData.cashDayMode || updateData.cash_regularDays || updateData.cash_regularDayRate || updateData.cash_extraDayRate || updateData.cash_extraShiftRate || updateData.hasHourlyRates || updateData.niHoursMode || updateData.minNiHours || updateData.maxNiHours || updateData.percentageNiHours || updateData.niRatePerHour || updateData.fixedNiHours || updateData.cashHoursMode || updateData.minCashHours || updateData.maxCashHours || updateData.percentageCashHours || updateData.cashRatePerHour || updateData.hasOtherConsiderations || updateData.note || updateData.niAdditions || updateData.niDeductions || updateData.cashAdditions || updateData.cashDeductions) {
@@ -918,13 +924,12 @@ exports.batchUpdateEmployees = function _callee7(req, res) {
                           cashDeductions: parsePairs(updateData.cashDeductions)
                         }
                       };
-                    } // Remove flat fields so they won’t be duplicated
+                    } // Remove flat fields so they won’t be duplicated in the payload
 
 
                     ['payStructureName', 'niDayMode', 'ni_regularDays', 'ni_regularDayRate', 'ni_extraDayRate', 'ni_extraShiftRate', 'cashDayMode', 'cash_regularDays', 'cash_regularDayRate', 'cash_extraDayRate', 'cash_extraShiftRate', 'hasHourlyRates', 'niHoursMode', 'minNiHours', 'maxNiHours', 'percentageNiHours', 'niRatePerHour', 'fixedNiHours', 'cashHoursMode', 'minCashHours', 'maxCashHours', 'percentageCashHours', 'cashRatePerHour', 'hasOtherConsiderations', 'note', 'niAdditions', 'niDeductions', 'cashAdditions', 'cashDeductions'].forEach(function (field) {
                       return delete updateData[field];
-                    }); // Update employee
-
+                    });
                     _context9.next = 47;
                     return regeneratorRuntime.awrap(Employee.findOneAndUpdate({
                       _id: updateData.employeeId,
