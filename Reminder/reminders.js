@@ -5,10 +5,10 @@ const Reminder = require('../Reminder/Reminder');
 const Notification = require('../Reminder/Notification');
 const { sendEmail } = require('../Reminder/email');
 const { getUsersByOrganization } = require('../Reminder/user');
-const { verifyToken } = require('../LoginSignup/auth.middleware');
+const { protect } = require('../LoginSignup/auth.middleware'); // Use 'protect' instead of 'verifyToken'
 
 // GET /reminders - list reminders for the user's organization
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', protect, async (req, res) => {
   try {
     const orgId = req.user.organizationId;
     // Optionally add filtering/pagination here
@@ -20,10 +20,11 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // GET /reminders/:id - get single reminder
-router.get('/:id', verifyToken, async (req, res) => {
+router.get('/:id', protect, async (req, res) => {
   try {
     const reminder = await Reminder.findById(req.params.id);
-    if (!reminder) return res.status(404).json({ message: 'Reminder not found' });
+    if (!reminder)
+      return res.status(404).json({ message: 'Reminder not found' });
     res.json({ reminder });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching reminder' });
@@ -31,7 +32,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 // POST /reminders - create a new reminder
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
     const { employeeId, employeeName, note, dueDate, status } = req.body;
     const orgId = req.user.organizationId;
@@ -55,7 +56,11 @@ router.post('/', verifyToken, async (req, res) => {
       });
       notif.save();
       // Also send email notifications:
-      sendEmail(user.email, 'New Reminder Created', `Reminder for ${employeeName}: ${note} (Due: ${new Date(dueDate).toLocaleDateString()})`);
+      sendEmail(
+        user.email,
+        'New Reminder Created',
+        `Reminder for ${employeeName}: ${note} (Due: ${new Date(dueDate).toLocaleDateString()})`
+      );
     });
 
     res.status(201).json({ message: 'Reminder created successfully', reminder });
@@ -66,11 +71,12 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // PUT /reminders/:id - update a reminder
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
   try {
     const updateData = req.body;
     const reminder = await Reminder.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!reminder) return res.status(404).json({ message: 'Reminder not found' });
+    if (!reminder)
+      return res.status(404).json({ message: 'Reminder not found' });
     res.json({ message: 'Reminder updated successfully', reminder });
   } catch (err) {
     res.status(500).json({ message: 'Error updating reminder' });
@@ -78,10 +84,11 @@ router.put('/:id', verifyToken, async (req, res) => {
 });
 
 // DELETE /reminders/:id - delete a reminder
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
     const reminder = await Reminder.findByIdAndDelete(req.params.id);
-    if (!reminder) return res.status(404).json({ message: 'Reminder not found' });
+    if (!reminder)
+      return res.status(404).json({ message: 'Reminder not found' });
     res.json({ message: 'Reminder deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Error deleting reminder' });
