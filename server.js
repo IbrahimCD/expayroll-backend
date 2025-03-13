@@ -13,6 +13,7 @@ const auditLogRoutes = require('./AuditLog/auditlog.routes');
 const nictaxRoutes = require('./NICTax/nictax.routes');
 const reportsRoutes = require('./Reports/reports.routes');
 const employeeWageReportRoutes = require('./EmployeeWageReport/employeeWageReport.routes');
+const remindersRoute = require('./Reminder/reminders');
 
 const app = express();
 connectDB();
@@ -43,7 +44,7 @@ app.use('/payruns', payRunRoutes);
 app.use('/nictax', nictaxRoutes);
 app.use('/reports', reportsRoutes);
 app.use('/employee-wage-report', employeeWageReportRoutes);
-
+app.use('/reminders', remindersRoute);
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);

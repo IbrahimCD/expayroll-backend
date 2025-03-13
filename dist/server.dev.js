@@ -28,6 +28,8 @@ var reportsRoutes = require('./Reports/reports.routes');
 
 var employeeWageReportRoutes = require('./EmployeeWageReport/employeeWageReport.routes');
 
+var remindersRoute = require('./Reminder/reminders');
+
 var app = express();
 connectDB(); // If your frontend is at Vercel, add that domain here
 // If you also test locally, you can add 'http://localhost:3000'
@@ -53,6 +55,7 @@ app.use('/payruns', payRunRoutes);
 app.use('/nictax', nictaxRoutes);
 app.use('/reports', reportsRoutes);
 app.use('/employee-wage-report', employeeWageReportRoutes);
+app.use('/reminders', remindersRoute);
 var PORT = process.env.PORT || 4000;
 app.listen(PORT, function () {
   console.log("Server listening on port ".concat(PORT));
