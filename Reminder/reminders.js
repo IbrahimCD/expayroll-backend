@@ -146,7 +146,7 @@ router.post('/:id/comments', protect, async (req, res) => {
     // Add audit log entry for comment
     reminder.auditLogs.push({
       action: 'Comment Added',
-      performedBy: req.user.userId
+      performedBy: req.user.userId,
       details: comment
     });
     await reminder.save();
