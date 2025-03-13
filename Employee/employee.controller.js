@@ -76,17 +76,23 @@ exports.createEmployee = async (req, res) => {
  */
 exports.getEmployees = async (req, res) => {
   try {
-    const { search = '', page = 1, limit = 200, status } = req.query;
+    const { search = '', page = 1, limit = 200, status, payStructure } = req.query;
     const query = { organizationId: req.user.orgId };
 
+    // If search is provided, apply to name fields
     if (search) {
       query.$or = [
         { firstName: { $regex: search, $options: 'i' } },
         { lastName: { $regex: search, $options: 'i' } },
-        { preferredName: { $regex: search, $options: 'i' } },
-        { "payStructure.payStructureName": { $regex: search, $options: 'i' } }
+        { preferredName: { $regex: search, $options: 'i' } }
       ];
     }
+
+    // If a payStructure filter is provided, add an AND condition on payStructure.payStructureName
+    if (payStructure) {
+      query["payStructure.payStructureName"] = { $regex: payStructure, $options: 'i' };
+    }
+
     if (status) {
       query.status = status;
     }

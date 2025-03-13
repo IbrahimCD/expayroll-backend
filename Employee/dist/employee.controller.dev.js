@@ -110,17 +110,17 @@ exports.createEmployee = function _callee(req, res) {
 
 
 exports.getEmployees = function _callee2(req, res) {
-  var _req$query, _req$query$search, search, _req$query$page, page, _req$query$limit, limit, status, query, skip, employeesPromise, countPromise, _ref, _ref2, employees, total, totalPages;
+  var _req$query, _req$query$search, search, _req$query$page, page, _req$query$limit, limit, status, payStructure, query, skip, employeesPromise, countPromise, _ref, _ref2, employees, total, totalPages;
 
   return regeneratorRuntime.async(function _callee2$(_context2) {
     while (1) {
       switch (_context2.prev = _context2.next) {
         case 0:
           _context2.prev = 0;
-          _req$query = req.query, _req$query$search = _req$query.search, search = _req$query$search === void 0 ? '' : _req$query$search, _req$query$page = _req$query.page, page = _req$query$page === void 0 ? 1 : _req$query$page, _req$query$limit = _req$query.limit, limit = _req$query$limit === void 0 ? 200 : _req$query$limit, status = _req$query.status;
+          _req$query = req.query, _req$query$search = _req$query.search, search = _req$query$search === void 0 ? '' : _req$query$search, _req$query$page = _req$query.page, page = _req$query$page === void 0 ? 1 : _req$query$page, _req$query$limit = _req$query.limit, limit = _req$query$limit === void 0 ? 200 : _req$query$limit, status = _req$query.status, payStructure = _req$query.payStructure;
           query = {
             organizationId: req.user.orgId
-          };
+          }; // If search is provided, apply to name fields
 
           if (search) {
             query.$or = [{
@@ -138,12 +138,15 @@ exports.getEmployees = function _callee2(req, res) {
                 $regex: search,
                 $options: 'i'
               }
-            }, {
-              "payStructure.payStructureName": {
-                $regex: search,
-                $options: 'i'
-              }
             }];
+          } // If a payStructure filter is provided, add an AND condition on payStructure.payStructureName
+
+
+          if (payStructure) {
+            query["payStructure.payStructureName"] = {
+              $regex: payStructure,
+              $options: 'i'
+            };
           }
 
           if (status) {
@@ -153,10 +156,10 @@ exports.getEmployees = function _callee2(req, res) {
           skip = (Number(page) - 1) * Number(limit);
           employeesPromise = Employee.find(query).skip(skip).limit(Number(limit));
           countPromise = Employee.countDocuments(query);
-          _context2.next = 10;
+          _context2.next = 11;
           return regeneratorRuntime.awrap(Promise.all([employeesPromise, countPromise]));
 
-        case 10:
+        case 11:
           _ref = _context2.sent;
           _ref2 = _slicedToArray(_ref, 2);
           employees = _ref2[0];
@@ -167,20 +170,20 @@ exports.getEmployees = function _callee2(req, res) {
             totalPages: totalPages
           }));
 
-        case 18:
-          _context2.prev = 18;
+        case 19:
+          _context2.prev = 19;
           _context2.t0 = _context2["catch"](0);
           console.error('Error fetching employees:', _context2.t0);
           return _context2.abrupt("return", res.status(500).json({
             message: 'Server error fetching employees'
           }));
 
-        case 22:
+        case 23:
         case "end":
           return _context2.stop();
       }
     }
-  }, null, null, [[0, 18]]);
+  }, null, null, [[0, 19]]);
 };
 /**
  * Get a single employee by ID.
