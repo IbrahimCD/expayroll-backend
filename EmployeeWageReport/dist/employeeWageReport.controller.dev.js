@@ -15,7 +15,7 @@ var Employee = require('../Employee/employee.model');
 var Location = require('../Location/location.model');
 
 exports.generateEmployeeWageReport = function _callee(req, res) {
-  var payRunId, orgId, payRun, employeeIds, employees, employeeMap, baseLocationIds, uniqueLocationIds, locations, locationMap, reportRows;
+  var payRunId, orgId, payRun, employeeIds, employees, employeeMap, uniqueLocationIds, locations, locationMap, reportRows;
   return regeneratorRuntime.async(function _callee$(_context) {
     while (1) {
       switch (_context.prev = _context.next) {
@@ -53,51 +53,47 @@ exports.generateEmployeeWageReport = function _callee(req, res) {
           }));
 
         case 10:
-          // Get all employeeIds from the pay run entries
+          // Collect all employee IDs from the pay run entries
           employeeIds = payRun.entries.map(function (entry) {
             return entry.employeeId;
-          }).filter(function (id) {
-            return !!id;
-          }); // Batch fetch employees for these IDs
+          }).filter(Boolean); // Batch fetch employees with only the required fields
 
           _context.next = 13;
           return regeneratorRuntime.awrap(Employee.find({
             _id: {
               $in: employeeIds
             }
-          }).lean());
+          }).select('firstName lastName payrollId baseLocationId payStructure').lean());
 
         case 13:
           employees = _context.sent;
-          employeeMap = {};
-          employees.forEach(function (emp) {
-            employeeMap[emp._id.toString()] = emp;
-          }); // Collect unique baseLocationIds from the fetched employees
+          // Build a lookup map for employees
+          employeeMap = new Map(employees.map(function (emp) {
+            return [emp._id.toString(), emp];
+          })); // Collect unique baseLocationIds from these employees
 
-          baseLocationIds = employees.filter(function (emp) {
+          uniqueLocationIds = _toConsumableArray(new Set(employees.filter(function (emp) {
             return emp.baseLocationId;
           }).map(function (emp) {
             return emp.baseLocationId.toString();
-          });
-          uniqueLocationIds = _toConsumableArray(new Set(baseLocationIds)); // Batch fetch locations for these IDs
+          }))); // Batch fetch locations with only the needed field
 
-          _context.next = 20;
+          _context.next = 18;
           return regeneratorRuntime.awrap(Location.find({
             _id: {
               $in: uniqueLocationIds
             }
-          }).lean());
+          }).select('name').lean());
 
-        case 20:
+        case 18:
           locations = _context.sent;
-          locationMap = {};
-          locations.forEach(function (loc) {
-            locationMap[loc._id.toString()] = loc;
-          }); // Build the report rows using map (synchronously)
+          // Build a lookup map for locations
+          locationMap = new Map(locations.map(function (loc) {
+            return [loc._id.toString(), loc];
+          })); // Build the report rows by mapping over the pay run entries
 
           reportRows = payRun.entries.map(function (entry) {
-            // Lookup employee using the pre-fetched map
-            var employee = employeeMap[entry.employeeId] || null;
+            var employee = employeeMap.get(entry.employeeId) || null;
             var firstName = '',
                 lastName = '';
 
@@ -110,21 +106,21 @@ exports.generateEmployeeWageReport = function _callee(req, res) {
               lastName = parts.slice(1).join(' ');
             }
 
-            var payrollId = entry.payrollId || ''; // Determine baseLocation: if entry already has it, use it; otherwise lookup employee's baseLocationId
+            var payrollId = entry.payrollId || ''; // Determine baseLocation: if the entry doesn't have it, lookup from the employee data
 
             var baseLocation = entry.baseLocation || '';
 
             if (!baseLocation && employee && employee.baseLocationId) {
-              var loc = locationMap[employee.baseLocationId.toString()];
-              baseLocation = loc ? loc.name || '' : '';
-            } // Extract computed fields from the pay run entry's breakdown.
+              var loc = locationMap.get(employee.baseLocationId.toString());
+              baseLocation = loc ? loc.name : '';
+            } // Extract computed fields from the breakdown
 
 
             var breakdown = entry.breakdown || {};
             var niDayWage = breakdown.E9_NIDaysWage || 0;
             var niHoursUsed = breakdown.E13_NIHoursUsed || 0;
             var netNIWage = breakdown.E21_netNIWage || 0;
-            var netCashWage = breakdown.E22_netCashWage || 0; // Get NI Regular Day Rate and NI Hours Rate from employee pay structure.
+            var netCashWage = breakdown.E22_netCashWage || 0; // Get NI Regular Day Rate and NI Hours Rate from employee's pay structure
 
             var niRegularDayRate = 0;
             var niHoursRate = 0;
@@ -156,18 +152,18 @@ exports.generateEmployeeWageReport = function _callee(req, res) {
             report: reportRows
           }));
 
-        case 27:
-          _context.prev = 27;
+        case 24:
+          _context.prev = 24;
           _context.t0 = _context["catch"](0);
           console.error('Error generating employee wage report:', _context.t0);
           return _context.abrupt("return", res.status(500).json({
             message: 'Server error generating employee wage report.'
           }));
 
-        case 31:
+        case 28:
         case "end":
           return _context.stop();
       }
     }
-  }, null, null, [[0, 27]]);
+  }, null, null, [[0, 24]]);
 };
