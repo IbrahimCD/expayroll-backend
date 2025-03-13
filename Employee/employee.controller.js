@@ -83,7 +83,8 @@ exports.getEmployees = async (req, res) => {
       query.$or = [
         { firstName: { $regex: search, $options: 'i' } },
         { lastName: { $regex: search, $options: 'i' } },
-        { preferredName: { $regex: search, $options: 'i' } }
+        { preferredName: { $regex: search, $options: 'i' } },
+        { "payStructure.payStructureName": { $regex: search, $options: 'i' } }
       ];
     }
     if (status) {
@@ -244,7 +245,6 @@ function parsePairs(str) {
   });
 }
 
-
 /**
  * Batch create employees.
  * Expects req.body.employees to be an array of employee objects parsed from CSV.
@@ -356,12 +356,6 @@ exports.batchCreateEmployees = async (req, res) => {
   }
 };
 
-
-/**
- * Batch Update Employees.
- * Expects req.body.employees to be an array of employee objects
- * Each object must include an "employeeId" field and the fields to update.
- */
 /**
  * Batch Update Employees.
  * Expects req.body.employees to be an array of employee objects.

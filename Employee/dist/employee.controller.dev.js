@@ -138,6 +138,11 @@ exports.getEmployees = function _callee2(req, res) {
                 $regex: search,
                 $options: 'i'
               }
+            }, {
+              "payStructure.payStructureName": {
+                $regex: search,
+                $options: 'i'
+              }
             }];
           }
 
@@ -729,12 +734,6 @@ exports.batchCreateEmployees = function _callee6(req, res) {
     }
   }, null, null, [[0, 35], [9, 20, 24, 32], [25,, 27, 31]]);
 };
-/**
- * Batch Update Employees.
- * Expects req.body.employees to be an array of employee objects
- * Each object must include an "employeeId" field and the fields to update.
- */
-
 /**
  * Batch Update Employees.
  * Expects req.body.employees to be an array of employee objects.
