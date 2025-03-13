@@ -10,7 +10,7 @@ const { protect } = require('../LoginSignup/auth.middleware'); // Use 'protect' 
 // GET /reminders - list reminders for the user's organization
 router.get('/', protect, async (req, res) => {
   try {
-    const orgId = req.user.organizatiId;
+    const orgId = req.user.orgId;
     // Optionally add filtering/pagination here
     const reminders = await Reminder.find({ organizationId: orgId }).sort({ dueDate: 1 });
     res.json({ reminders });
@@ -23,8 +23,7 @@ router.get('/', protect, async (req, res) => {
 router.get('/:id', protect, async (req, res) => {
   try {
     const reminder = await Reminder.findById(req.params.id);
-    if (!reminder)
-      return res.status(404).json({ message: 'Reminder not found' });
+    if (!reminder) return res.status(404).json({ message: 'Reminder not found' });
     res.json({ reminder });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching reminder' });
