@@ -51,7 +51,7 @@ router.post('/', protect, async (req, res) => {
     // Add audit log entry for creation
     reminder.auditLogs.push({
       action: 'Created',
-      performedBy: req.user._id,
+      performedBy: req.user.userId,
       details: 'Reminder created'
     });
 
@@ -88,7 +88,7 @@ router.put('/:id', protect, async (req, res) => {
     updateData.$push = {
       auditLogs: {
         action: 'Updated',
-        performedBy: req.user._id,
+        performedBy: req.user.userId,
         details: 'Reminder updated'
       }
     };
@@ -119,7 +119,7 @@ router.put('/:id', protect, async (req, res) => {
         auditLogs: [
           {
             action: 'Auto-Generated',
-            performedBy: req.user._id,
+            performedBy: req.user.userId,
             details: 'Recurring reminder auto-generated after completion'
           }
         ]
@@ -146,7 +146,7 @@ router.post('/:id/comments', protect, async (req, res) => {
     // Add audit log entry for comment
     reminder.auditLogs.push({
       action: 'Comment Added',
-      performedBy: req.user._id,
+      performedBy: req.user.userId
       details: comment
     });
     await reminder.save();
@@ -164,7 +164,7 @@ router.put('/:id/escalate', protect, async (req, res) => {
     reminder.status = 'Escalated';
     reminder.auditLogs.push({
       action: 'Escalated',
-      performedBy: req.user._id,
+      performedBy: req.user.userId,
       details: 'Reminder escalated due to overdue'
     });
     await reminder.save();
