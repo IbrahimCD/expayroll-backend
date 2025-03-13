@@ -10,7 +10,7 @@ const { protect } = require('../LoginSignup/auth.middleware'); // Use 'protect' 
 // GET /reminders - list reminders for the user's organization
 router.get('/', protect, async (req, res) => {
   try {
-    const orgId = req.user.organizationId;
+    const orgId = req.user.organizatiId;
     // Optionally add filtering/pagination here
     const reminders = await Reminder.find({ organizationId: orgId }).sort({ dueDate: 1 });
     res.json({ reminders });
@@ -35,7 +35,7 @@ router.get('/:id', protect, async (req, res) => {
 router.post('/', protect, async (req, res) => {
   try {
     const { employeeId, employeeName, note, dueDate, status } = req.body;
-    const orgId = req.user.organizationId;
+    const orgId = req.user.orgId;
     const reminder = new Reminder({
       employeeId,
       employeeName,
@@ -43,7 +43,8 @@ router.post('/', protect, async (req, res) => {
       dueDate,
       status: status || 'Pending',
       organizationId: orgId,
-      createdBy: req.user._id
+      createdBy: req.user.userId
+
     });
     await reminder.save();
 
