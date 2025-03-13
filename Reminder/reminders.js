@@ -42,7 +42,7 @@ router.post('/', protect, async (req, res) => {
       dueDate,
       status: status || 'Pending',
       organizationId: orgId,
-      createdBy: req.user._id,
+      createdBy: req.user.userId,
       isRecurring: isRecurring || false,
       recurrenceInterval: recurrenceInterval || null,
       attachments: attachments || []
@@ -112,7 +112,7 @@ router.put('/:id', protect, async (req, res) => {
         dueDate: newDueDate,
         status: 'Pending',
         organizationId: reminder.organizationId,
-        createdBy: req.user._id,
+        createdBy: req.user.userId,
         isRecurring: reminder.isRecurring,
         recurrenceInterval: reminder.recurrenceInterval,
         attachments: reminder.attachments,
