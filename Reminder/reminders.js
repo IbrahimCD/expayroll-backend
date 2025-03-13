@@ -4,7 +4,7 @@ const router = express.Router();
 const Reminder = require('../Reminder/Reminder');
 const Notification = require('../Reminder/Notification');
 const { sendEmail } = require('../Reminder/email');
-const { getUsersByOrganization } = require('..//Reminder/user');
+const { getUsersByOrganization } = require('../Reminder/user');
 const { verifyToken } = require('../LoginSignup/auth.middleware');
 
 // GET /reminders - list reminders for the user's organization
