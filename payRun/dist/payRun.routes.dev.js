@@ -30,5 +30,7 @@ router.put('/:payRunId/revert', protect, roleCheck(['Admin', 'Manager']), payRun
 
 router.put('/:payRunId/paid', protect, roleCheck(['Admin', 'Manager']), payRunController.markPayRunAsPaid); // RECALCULATE a pay run (while status=Draft if timesheets/NIC changed)
 
-router.put('/:payRunId/recalc', protect, roleCheck(['Admin', 'Manager']), payRunController.recalcPayRun);
+router.put('/:payRunId/recalc', protect, roleCheck(['Admin', 'Manager']), payRunController.recalcPayRun); // NEW: EXPORT a pay run
+
+router.get('/:payRunId/export', protect, roleCheck(['Admin', 'Manager']), payRunController.exportPayRun);
 module.exports = router;
