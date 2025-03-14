@@ -1506,4 +1506,161 @@ exports.deletePayRun = function _callee9(req, res) {
       }
     }
   }, null, null, [[0, 15]]);
-};
+}; // New function to export PayRun details as CSV
+
+
+exports.exportPayRunCSV = function _callee10(req, res) {
+  var payRunId, orgId, payRun, headers, csvRows, _iteratorNormalCompletion5, _didIteratorError5, _iteratorError5, _iterator5, _step5, entry, row, psName, bd, allocations, csvString;
+
+  return regeneratorRuntime.async(function _callee10$(_context12) {
+    while (1) {
+      switch (_context12.prev = _context12.next) {
+        case 0:
+          _context12.prev = 0;
+          payRunId = req.params.payRunId;
+          orgId = req.user.orgId;
+
+          if (payRunId) {
+            _context12.next = 5;
+            break;
+          }
+
+          return _context12.abrupt("return", res.status(400).json({
+            message: 'Missing payRunId in parameters.'
+          }));
+
+        case 5:
+          _context12.next = 7;
+          return regeneratorRuntime.awrap(PayRun.findOne({
+            _id: payRunId,
+            organizationId: orgId
+          }));
+
+        case 7:
+          payRun = _context12.sent;
+
+          if (payRun) {
+            _context12.next = 10;
+            break;
+          }
+
+          return _context12.abrupt("return", res.status(404).json({
+            message: 'Pay Run not found.'
+          }));
+
+        case 10:
+          // Create header row – adjust the columns as needed.
+          headers = ["PayRunName", "PayRunStartDate", "PayRunEndDate", "PayRunStatus", "EmployeeName", "PayrollID", "PayStructureName", "Breakdown_E1_totalHours", "Breakdown_E2_totalDays", "Breakdown_E9_NIDaysWage", "Breakdown_E10_cashDaysWage", "Breakdown_E11_grossDaysWage", "Breakdown_E12_extraShiftWage", "Breakdown_E13_NIHoursUsed", "Breakdown_E14_cashHoursUsed", "Breakdown_E15_NIHoursWage", "Breakdown_E16_cashHoursWage", "Breakdown_E17_grossHoursWage", "Breakdown_E18_grossNIWage", "Breakdown_E19_grossCashWage", "Breakdown_E20_totalGrossWage", "Breakdown_E21_netNIWage", "Breakdown_E22_netCashWage", "Breakdown_E23_totalNetWage", "Breakdown_D1_eerNIC", "Breakdown_D2_eesNIC", "Breakdown_D3_eesTax", "ContributingTimesheets", "TimesheetAllocations"]; // Prepare an array to hold CSV rows.
+
+          csvRows = [];
+          csvRows.push(headers.join(",")); // Loop over each pay run entry to flatten the data.
+
+          _iteratorNormalCompletion5 = true;
+          _didIteratorError5 = false;
+          _iteratorError5 = undefined;
+          _context12.prev = 16;
+
+          for (_iterator5 = payRun.entries[Symbol.iterator](); !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
+            entry = _step5.value;
+            row = []; // Add pay run-level info.
+
+            row.push("\"".concat(payRun.payRunName, "\""));
+            row.push("\"".concat(new Date(payRun.startDate).toISOString().split('T')[0], "\""));
+            row.push("\"".concat(new Date(payRun.endDate).toISOString().split('T')[0], "\""));
+            row.push("\"".concat(payRun.status, "\"")); // Employee data from the entry.
+
+            row.push("\"".concat(entry.employeeName, "\""));
+            row.push("\"".concat(entry.payrollId, "\"")); // Use payStructure if available
+
+            psName = "";
+
+            if (entry.payStructure && entry.payStructure.payStructureName) {
+              psName = entry.payStructure.payStructureName;
+            }
+
+            row.push("\"".concat(psName, "\"")); // Breakdown fields (if breakdown exists, otherwise default to 0)
+
+            bd = entry.breakdown || {};
+            row.push(bd.E1_totalHours || 0);
+            row.push(bd.E2_totalDays || 0);
+            row.push(bd.E9_NIDaysWage || 0);
+            row.push(bd.E10_cashDaysWage || 0);
+            row.push(bd.E11_grossDaysWage || 0);
+            row.push(bd.E12_extraShiftWage || 0);
+            row.push(bd.E13_NIHoursUsed || 0);
+            row.push(bd.E14_cashHoursUsed || 0);
+            row.push(bd.E15_NIHoursWage || 0);
+            row.push(bd.E16_cashHoursWage || 0);
+            row.push(bd.E17_grossHoursWage || 0);
+            row.push(bd.E18_grossNIWage || 0);
+            row.push(bd.E19_grossCashWage || 0);
+            row.push(bd.E20_totalGrossWage || 0);
+            row.push(bd.E21_netNIWage || 0);
+            row.push(bd.E22_netCashWage || 0);
+            row.push(bd.E23_totalNetWage || 0);
+            row.push(bd.D1_eerNIC || 0);
+            row.push(bd.D2_eesNIC || 0);
+            row.push(bd.D3_eesTax || 0); // Contributing timesheets – convert the array to a JSON string.
+
+            row.push("\"".concat(JSON.stringify(entry.contributingTimesheets || []), "\"")); // Timesheet allocations from breakdown (if any).
+
+            allocations = bd.timesheetAllocations && bd.timesheetAllocations.length > 0 ? bd.timesheetAllocations : [];
+            row.push("\"".concat(JSON.stringify(allocations), "\""));
+            csvRows.push(row.join(","));
+          }
+
+          _context12.next = 24;
+          break;
+
+        case 20:
+          _context12.prev = 20;
+          _context12.t0 = _context12["catch"](16);
+          _didIteratorError5 = true;
+          _iteratorError5 = _context12.t0;
+
+        case 24:
+          _context12.prev = 24;
+          _context12.prev = 25;
+
+          if (!_iteratorNormalCompletion5 && _iterator5["return"] != null) {
+            _iterator5["return"]();
+          }
+
+        case 27:
+          _context12.prev = 27;
+
+          if (!_didIteratorError5) {
+            _context12.next = 30;
+            break;
+          }
+
+          throw _iteratorError5;
+
+        case 30:
+          return _context12.finish(27);
+
+        case 31:
+          return _context12.finish(24);
+
+        case 32:
+          csvString = csvRows.join("\n"); // Set headers so the browser treats this response as a file download.
+
+          res.header("Content-Type", "text/csv");
+          res.attachment("PayRun_".concat(payRun.payRunName.replace(/ /g, "_"), ".csv"));
+          return _context12.abrupt("return", res.send(csvString));
+
+        case 38:
+          _context12.prev = 38;
+          _context12.t1 = _context12["catch"](0);
+          console.error("Error exporting pay run CSV:", _context12.t1);
+          return _context12.abrupt("return", res.status(500).json({
+            message: "Server error exporting pay run CSV."
+          }));
+
+        case 42:
+        case "end":
+          return _context12.stop();
+      }
+    }
+  }, null, null, [[0, 38], [16, 20, 24, 32], [25,, 27, 31]]);
+}; // (Keep the rest of your controller functions unchanged)

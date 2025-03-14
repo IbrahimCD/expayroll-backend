@@ -755,3 +755,122 @@ exports.deletePayRun = async (req, res) => {
     return res.status(500).json({ message: 'Server error deleting pay run.' });
   }
 };
+// New function to export PayRun details as CSV
+exports.exportPayRunCSV = async (req, res) => {
+  try {
+    const { payRunId } = req.params;
+    const { orgId } = req.user;
+    if (!payRunId) {
+      return res.status(400).json({ message: 'Missing payRunId in parameters.' });
+    }
+    // Fetch the pay run with matching organization
+    const payRun = await PayRun.findOne({ _id: payRunId, organizationId: orgId });
+    if (!payRun) {
+      return res.status(404).json({ message: 'Pay Run not found.' });
+    }
+    
+    // Create header row – adjust the columns as needed.
+    const headers = [
+      "PayRunName",
+      "PayRunStartDate",
+      "PayRunEndDate",
+      "PayRunStatus",
+      "EmployeeName",
+      "PayrollID",
+      "PayStructureName",
+      "Breakdown_E1_totalHours",
+      "Breakdown_E2_totalDays",
+      "Breakdown_E9_NIDaysWage",
+      "Breakdown_E10_cashDaysWage",
+      "Breakdown_E11_grossDaysWage",
+      "Breakdown_E12_extraShiftWage",
+      "Breakdown_E13_NIHoursUsed",
+      "Breakdown_E14_cashHoursUsed",
+      "Breakdown_E15_NIHoursWage",
+      "Breakdown_E16_cashHoursWage",
+      "Breakdown_E17_grossHoursWage",
+      "Breakdown_E18_grossNIWage",
+      "Breakdown_E19_grossCashWage",
+      "Breakdown_E20_totalGrossWage",
+      "Breakdown_E21_netNIWage",
+      "Breakdown_E22_netCashWage",
+      "Breakdown_E23_totalNetWage",
+      "Breakdown_D1_eerNIC",
+      "Breakdown_D2_eesNIC",
+      "Breakdown_D3_eesTax",
+      "ContributingTimesheets",
+      "TimesheetAllocations"
+    ];
+    
+    // Prepare an array to hold CSV rows.
+    const csvRows = [];
+    csvRows.push(headers.join(","));
+    
+    // Loop over each pay run entry to flatten the data.
+    for (const entry of payRun.entries) {
+      const row = [];
+      
+      // Add pay run-level info.
+      row.push(`"${payRun.payRunName}"`);
+      row.push(`"${new Date(payRun.startDate).toISOString().split('T')[0]}"`);
+      row.push(`"${new Date(payRun.endDate).toISOString().split('T')[0]}"`);
+      row.push(`"${payRun.status}"`);
+      
+      // Employee data from the entry.
+      row.push(`"${entry.employeeName}"`);
+      row.push(`"${entry.payrollId}"`);
+      // Use payStructure if available
+      let psName = "";
+      if (entry.payStructure && entry.payStructure.payStructureName) {
+        psName = entry.payStructure.payStructureName;
+      }
+      row.push(`"${psName}"`);
+      
+      // Breakdown fields (if breakdown exists, otherwise default to 0)
+      const bd = entry.breakdown || {};
+      row.push(bd.E1_totalHours || 0);
+      row.push(bd.E2_totalDays || 0);
+      row.push(bd.E9_NIDaysWage || 0);
+      row.push(bd.E10_cashDaysWage || 0);
+      row.push(bd.E11_grossDaysWage || 0);
+      row.push(bd.E12_extraShiftWage || 0);
+      row.push(bd.E13_NIHoursUsed || 0);
+      row.push(bd.E14_cashHoursUsed || 0);
+      row.push(bd.E15_NIHoursWage || 0);
+      row.push(bd.E16_cashHoursWage || 0);
+      row.push(bd.E17_grossHoursWage || 0);
+      row.push(bd.E18_grossNIWage || 0);
+      row.push(bd.E19_grossCashWage || 0);
+      row.push(bd.E20_totalGrossWage || 0);
+      row.push(bd.E21_netNIWage || 0);
+      row.push(bd.E22_netCashWage || 0);
+      row.push(bd.E23_totalNetWage || 0);
+      row.push(bd.D1_eerNIC || 0);
+      row.push(bd.D2_eesNIC || 0);
+      row.push(bd.D3_eesTax || 0);
+      
+      // Contributing timesheets – convert the array to a JSON string.
+      row.push(`"${JSON.stringify(entry.contributingTimesheets || [])}"`);
+      
+      // Timesheet allocations from breakdown (if any).
+      const allocations = (bd.timesheetAllocations && bd.timesheetAllocations.length > 0)
+        ? bd.timesheetAllocations
+        : [];
+      row.push(`"${JSON.stringify(allocations)}"`);
+      
+      csvRows.push(row.join(","));
+    }
+    
+    const csvString = csvRows.join("\n");
+    
+    // Set headers so the browser treats this response as a file download.
+    res.header("Content-Type", "text/csv");
+    res.attachment(`PayRun_${payRun.payRunName.replace(/ /g, "_")}.csv`);
+    return res.send(csvString);
+  } catch (error) {
+    console.error("Error exporting pay run CSV:", error);
+    return res.status(500).json({ message: "Server error exporting pay run CSV." });
+  }
+};
+
+// (Keep the rest of your controller functions unchanged)
