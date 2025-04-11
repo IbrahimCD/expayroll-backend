@@ -34,5 +34,6 @@ router.put('/:payRunId/recalc', protect, roleCheck(['Admin', 'Manager']), payRun
 
 // NEW: EXPORT a pay run
 router.get('/:payRunId/export', protect, roleCheck(['Admin', 'Manager']), payRunController.exportPayRun);
+console.log('payRunController:', payRunController);
 
 module.exports = router;

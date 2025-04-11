@@ -79,7 +79,7 @@ const payRunEntrySchema = new Schema(
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
     employeeName: { type: String, required: true },
     payrollId: { type: String, default: '' },
-
+    baseLocation: { type: String, default: '' },
     // new line:
     payStructure: { type: Schema.Types.Mixed }, 
 
