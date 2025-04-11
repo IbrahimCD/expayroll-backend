@@ -4,6 +4,7 @@ const Timesheet = require('../Timesheet/timesheet.model');
 const NICTax = require('../NICTax/nictax.model');
 const Employee = require('../Employee/employee.model');
 const mongoose = require('mongoose');
+const Location = require('../Location/location.model'); // UPDATED: Import Location model
 
 async function hasOverlappingPayRun(orgId, start, end) {
   // Overlap means an existing pay run has:
@@ -315,6 +316,18 @@ exports.createPayRun = async (req, res) => {
 
     const employees = await Employee.find({ _id: { $in: Array.from(empSet) } });
 
+    // UPDATED: Build a batch lookup for base location names using employees' baseLocationId
+    const baseLocationIds = new Set();
+    employees.forEach(emp => {
+      if (emp.baseLocationId) {
+        baseLocationIds.add(emp.baseLocationId.toString());
+      }
+    });
+    const locations = await Location.find({ _id: { $in: Array.from(baseLocationIds) } })
+      .select('name')
+      .lean();
+    const locationMap = new Map(locations.map(loc => [loc._id.toString(), loc.name]));
+
     let entries = [];
     let totalNetPay = 0;
 
@@ -350,9 +363,16 @@ exports.createPayRun = async (req, res) => {
         };
       }).filter(Boolean);
 
+      // Retrieve base location name from the lookup map using emp.baseLocationId
+      let baseLocationName = '';
+      if (emp.baseLocationId) {
+        baseLocationName = locationMap.get(emp.baseLocationId.toString()) || '';
+      }
+
       entries.push({
         employeeId: emp._id,
         employeeName: emp.preferredName || `${emp.firstName} ${emp.lastName}`,
+        baseLocation: baseLocationName,  // UPDATED: Setting the new field using the lookup
         payrollId: emp.payrollId,
         payStructure: emp.payStructure,
         rawTimesheetIds: relevantTimesheets.map(t => t._id),
@@ -500,6 +520,7 @@ exports.recalcPayRun = async (req, res) => {
     let totalNetPay = 0;
     let newEntries = [];
 
+    // In recalc, we loop over each existing entry
     for (let entry of payrun.entries) {
       const empId = entry.employeeId;
       const emp = await Employee.findById(empId);
@@ -536,10 +557,18 @@ exports.recalcPayRun = async (req, res) => {
         };
       }).filter(Boolean);
 
+      // UPDATED: Lookup base location individually (if not many entries)
+      let baseLocationName = '';
+      if (emp.baseLocationId) {
+        const loc = await Location.findById(emp.baseLocationId).select('name').lean();
+        baseLocationName = loc ? loc.name : '';
+      }
+
       newEntries.push({
         employeeId: empId,
         employeeName: emp.preferredName || `${emp.firstName} ${emp.lastName}`,
         payrollId: emp.payrollId,
+        baseLocation: baseLocationName, // UPDATED: Set using lookup
         payStructure: emp.payStructure,
         rawTimesheetIds: relevantTimesheets.map(t => t._id),
         rawNICTaxIds: relevantNIC.map(n => n._id),
@@ -755,8 +784,9 @@ exports.deletePayRun = async (req, res) => {
     return res.status(500).json({ message: 'Server error deleting pay run.' });
   }
 };
+
 // New function to export PayRun details as CSV
-exports.exportPayRunCSV = async (req, res) => {
+exports.exportPayRun = async (req, res) => {
   try {
     const { payRunId } = req.params;
     const { orgId } = req.user;
