@@ -23,7 +23,7 @@ connectDB();
 const corsOptions = {
   origin: [
     'https://expayroll-frontend.vercel.app', 
-    // 'http://localhost:3000'  <-- uncomment if needed
+    'http://localhost:3000' 
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
