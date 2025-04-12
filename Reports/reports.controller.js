@@ -1,4 +1,3 @@
-// backend/Reports/reports.controller.js
 const PayRun = require('../payRun/payRun.model');
 const Timesheet = require('../Timesheet/timesheet.model');
 const Location = require('../Location/location.model');
@@ -7,12 +6,12 @@ const mongoose = require('mongoose');
 /**
  * GET /reports/wage-cost-allocation
  * Query param: payRunId
- * 
+ *
  * 1) Load the pay run by payRunId.
- * 2) For each timesheet referenced by the pay run's entries, gather:
- *    - Timesheet location, date range
- *    - The allocated data for each employee
- * 3) Return a structured JSON that the frontend can easily display.
+ * 2) For each timesheet referenced by the pay run's entries, gather location and date range data,
+ *    plus the allocated data for each employee (including payStructureName).
+ * 3) Aggregate contributing timesheet details (including payStructureName).
+ * 4) Return a structured JSON that the frontend can easily display or export.
  */
 exports.getWageCostAllocation = async (req, res) => {
   try {
@@ -33,33 +32,14 @@ exports.getWageCostAllocation = async (req, res) => {
       return res.status(404).json({ message: 'Pay Run not found.' });
     }
 
-    // We'll store timesheet allocations in a map: { timesheetId: { data... } }
-    // payRun.entries might look like: 
-    // [
-    //   {
-    //     employeeId,
-    //     employeeName,
-    //     breakdown: { ... },
-    //     timesheetAllocations: [
-    //       {
-    //         timesheetId, 
-    //         F8_allocGrossNIWage,
-    //         F9_allocGrossCashWage,
-    //         F10_allocEerNIC,
-    //         F11_allocWageCost
-    //       }, ...
-    //     ]
-    //   },
-    //   ...
-    // ]
-    //
-    // We'll group by timesheetId so we can sum them up.
+    // We'll store timesheet allocations in a map: { timesheetId: { employees: [], totals: {...} } }
+    const timesheetMap = {};
 
-    const timesheetMap = {}; // { [timesheetId]: { employees: [], totals: {} } }
-
-    // For each pay run entry (one entry per employee):
+    // 2) Collect allocations for each timesheet from all pay run entries
     for (const entry of payRun.entries) {
       const employeeName = entry.employeeName || 'Unknown';
+      // Use optional chaining to get payStructure.payStructureName
+      const payStructureName = entry.payStructure?.payStructureName || 'N/A';
       const payrollId = entry.payrollId || 'N/A';
 
       if (!entry.breakdown || !entry.breakdown.timesheetAllocations) continue;
@@ -82,8 +62,10 @@ exports.getWageCostAllocation = async (req, res) => {
         const eerNIC = alloc.F10_allocEerNIC || 0;
         const wageCost = alloc.F11_allocWageCost || 0;
 
+        // Push each employee’s record with payStructureName included
         timesheetMap[tId].employees.push({
           employeeName,
+          payStructureName,
           payrollId,
           allocatedNiWage: niWage,
           allocatedCashWage: cashWage,
@@ -91,6 +73,7 @@ exports.getWageCostAllocation = async (req, res) => {
           allocatedWageCost: wageCost
         });
 
+        // Sum up totals
         timesheetMap[tId].totalNiWage += niWage;
         timesheetMap[tId].totalCashWage += cashWage;
         timesheetMap[tId].totalEerNIC += eerNIC;
@@ -98,23 +81,23 @@ exports.getWageCostAllocation = async (req, res) => {
       }
     }
 
-    // 2) Now we need to load each timesheet to get location + date range
-    // Convert the timesheetMap keys to objectIds if needed:
+    // 3) Fetch actual Timesheet documents (location, date range, etc.)
     const timesheetIds = Object.keys(timesheetMap).filter(k => mongoose.isValidObjectId(k));
     const timesheets = await Timesheet.find({ _id: { $in: timesheetIds } });
 
-    // We build a final array of timesheet-based data
+    // Build the final array for wage cost allocations
     const results = [];
     for (const t of timesheets) {
       const tId = String(t._id);
       const data = timesheetMap[tId];
       if (!data) continue;
 
-      // If you want the location name:
-      let locationName = '';
+      let locationName = 'Unknown Location';
       if (t.locationId) {
         const loc = await Location.findById(t.locationId);
-        locationName = loc ? loc.name : 'Unknown Location';
+        if (loc && loc.name) {
+          locationName = loc.name;
+        }
       }
 
       results.push({
@@ -133,20 +116,47 @@ exports.getWageCostAllocation = async (req, res) => {
       });
     }
 
-    // 3) Return a structured object
+    // 4) Aggregate additional "contributingTimesheets" info (if any)
+    const contributingTimesheets = [];
+    for (const entry of payRun.entries) {
+      if (entry.contributingTimesheets && entry.contributingTimesheets.length > 0) {
+        // Use optional chaining to get payStructure.payStructureName for contributing records too
+        const payStructureName = entry.payStructure?.payStructureName || 'N/A';
+        for (const ct of entry.contributingTimesheets) {
+          contributingTimesheets.push({
+            employeeName: entry.employeeName || 'Unknown',
+            payStructureName,
+            payrollId: entry.payrollId || 'N/A',
+            timesheetName: ct.timesheetName || '',
+            hoursWorked: ct.hoursWorked || 0,
+            daysWorked: ct.daysWorked || 0,
+            extraShiftWorked: ct.extraShiftWorked || 0,
+            addition: ct.addition || 0,
+            deduction: ct.deduction || 0,
+            notes: ct.notes || ''
+          });
+        }
+      }
+    }
+
+    // 5) Return final structured JSON
     return res.status(200).json({
       payRunName: payRun.payRunName || '',
-      wageCostAllocations: results
+      wageCostAllocations: results,
+      contributingTimesheets
     });
+
   } catch (err) {
     console.error('Error in getWageCostAllocation:', err);
-    return res.status(500).json({ message: 'Server error generating wage cost allocation report.' });
+    return res.status(500).json({
+      message: 'Server error generating wage cost allocation report.'
+    });
   }
 };
 
 /**
  * GET /reports/payruns
- * Return a list of all pay runs for the dropdown.
+ * Returns a list of pay runs for the dropdown.
  */
 exports.listPayRuns = async (req, res) => {
   try {

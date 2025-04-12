@@ -74,6 +74,9 @@ exports.createEmployee = async (req, res) => {
 /**
  * Get employees with search, filtering, and pagination.
  */
+/**
+ * Get employees with search, filtering, and pagination.
+ */
 exports.getEmployees = async (req, res) => {
   try {
     const { search = '', page = 1, limit = 200, status, payStructure } = req.query;
@@ -88,7 +91,7 @@ exports.getEmployees = async (req, res) => {
       ];
     }
 
-    // If a payStructure filter is provided, add an AND condition on payStructure.payStructureName
+    // If a payStructure filter is provided
     if (payStructure) {
       query["payStructure.payStructureName"] = { $regex: payStructure, $options: 'i' };
     }
@@ -98,7 +101,13 @@ exports.getEmployees = async (req, res) => {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
-    const employeesPromise = Employee.find(query).skip(skip).limit(Number(limit));
+
+    // ADD THIS .populate() CALL:
+    const employeesPromise = Employee.find(query)
+      .populate({ path: 'baseLocationId', select: 'name' })
+      .skip(skip)
+      .limit(Number(limit));
+
     const countPromise = Employee.countDocuments(query);
 
     const [employees, total] = await Promise.all([employeesPromise, countPromise]);
