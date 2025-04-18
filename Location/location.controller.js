@@ -116,7 +116,12 @@ exports.getLocations = async (req, res) => {
 exports.getLocation = async (req, res) => {
   try {
     const orgId = req.user.orgId || req.user.organizationId;
-    const { id } = req.params;
+    let { id } = req.params;
+
+      // 1) Reject anything that isn’t a valid 24‑char ObjectId
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid location ID format.' });
+      }
 
     const location = await Location.findOne({ _id: id, organizationId: orgId });
     if (!location) {
