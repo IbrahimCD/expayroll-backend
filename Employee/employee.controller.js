@@ -4,6 +4,67 @@ const Employee = require('./employee.model');
 const Location = require('../Location/location.model');
 
 /**
+ * Helper to compute numeric age from a date-of-birth string.
+ */
+function computeAge(dobString) {
+  if (!dobString) return null;
+  const dob = new Date(dobString);
+  if (isNaN(dob)) return null;
+
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+
+  // Check if birthday has not occurred yet this year
+  const m = now.getMonth() - dob.getMonth();
+  const d = now.getDate() - dob.getDate();
+  if (m < 0 || (m === 0 && d < 0)) {
+    age--;
+  }
+  return age;
+}
+
+/**
+ * Validate pay structure constraints:
+ *  1) If hasDailyRates == true, must NOT have hasHourlyRates == true, and vice versa.
+ *  2) If niDayMode == 'ALL', must NOT have cashDayMode == 'ALL'.
+ *  3) If niHoursMode == 'ALL' or 'CUSTOM', must NOT have cashHoursMode == 'ALL'.
+ */
+function validatePayStructureConstraints(payStructure) {
+  if (!payStructure) return; // If no payStructure, no checks needed.
+
+  // #1: hasDailyRates vs hasHourlyRates
+  if (payStructure.hasDailyRates && payStructure.hasHourlyRates) {
+    throw new Error(
+      'Invalid pay structure: cannot have both "hasDailyRates" and "hasHourlyRates" set to true.'
+    );
+  }
+
+  // #2: niDayMode vs cashDayMode
+  if (
+    payStructure.dailyRates &&
+    payStructure.dailyRates.niDayMode === 'ALL' &&
+    payStructure.dailyRates.cashDayMode === 'ALL'
+  ) {
+    throw new Error(
+      'Invalid pay structure: cannot set niDayMode = ALL and cashDayMode = ALL simultaneously.'
+    );
+  }
+
+  // #3: niHoursMode vs cashHoursMode
+  if (payStructure.hourlyRates) {
+    const niMode = payStructure.hourlyRates.niHoursMode || 'NONE';
+    const cashMode = payStructure.hourlyRates.cashHoursMode || 'NONE';
+
+    const niIsAllOrCustom = (niMode === 'ALL' || niMode === 'CUSTOM');
+    if (niIsAllOrCustom && cashMode === 'ALL') {
+      throw new Error(
+        'Invalid pay structure: cannot set niHoursMode = ALL or CUSTOM and cashHoursMode = ALL at the same time.'
+      );
+    }
+  }
+}
+
+/**
  * Create a new employee.
  * The organizationId is taken from req.user.orgId.
  */
@@ -12,13 +73,14 @@ exports.createEmployee = async (req, res) => {
     // Merge organizationId from the token into the payload:
     const payload = { ...req.body, organizationId: req.user.orgId };
 
-    // --- NEW: If payStructure provided, ensure otherConsiderations arrays exist. ---
+    // If payStructure provided, run validations + fill missing arrays
     if (payload.payStructure) {
-      // Process payStructure.dailyRates if provided (using your new nested structure)
+      // Validate constraints
+      validatePayStructureConstraints(payload.payStructure);
+
       if (payload.payStructure.dailyRates) {
         const dr = payload.payStructure.dailyRates;
-
-        // Process NI Daily Rates based on niDayMode
+        // NI Daily Rates
         if (dr.niDayMode === 'NONE') {
           dr.niRates = {
             regularDays: 0,
@@ -31,8 +93,7 @@ exports.createEmployee = async (req, res) => {
           dr.niRates.extraDayRate = 0;
           dr.niRates.extraShiftRate = 0;
         }
-
-        // Process Cash Daily Rates based on cashDayMode
+        // Cash Daily Rates
         if (dr.cashDayMode === 'NONE') {
           dr.cashRates = {
             regularDays: 0,
@@ -43,12 +104,11 @@ exports.createEmployee = async (req, res) => {
         }
       }
 
-      // --- Make sure otherConsiderations is well-formed if hasOtherConsiderations is true ---
+      // If hasOtherConsiderations is true, ensure arrays are present
       if (payload.payStructure.hasOtherConsiderations) {
         if (!payload.payStructure.otherConsiderations) {
           payload.payStructure.otherConsiderations = {};
         }
-        // Default arrays if not provided
         payload.payStructure.otherConsiderations.niAdditions =
           payload.payStructure.otherConsiderations.niAdditions || [];
         payload.payStructure.otherConsiderations.niDeductions =
@@ -67,13 +127,11 @@ exports.createEmployee = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating employee:', error);
-    return res.status(500).json({ message: 'Server error creating employee' });
+    // If it's a validation error from our code, respond 400
+    return res.status(400).json({ message: error.message });
   }
 };
 
-/**
- * Get employees with search, filtering, and pagination.
- */
 /**
  * Get employees with search, filtering, and pagination.
  */
@@ -96,22 +154,31 @@ exports.getEmployees = async (req, res) => {
       query["payStructure.payStructureName"] = { $regex: payStructure, $options: 'i' };
     }
 
+    // If a status filter is provided
     if (status) {
       query.status = status;
     }
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    // ADD THIS .populate() CALL:
+    // We'll use .lean() so we can directly modify the returned documents
     const employeesPromise = Employee.find(query)
       .populate({ path: 'baseLocationId', select: 'name' })
       .skip(skip)
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .lean(); // plain JS objects
 
     const countPromise = Employee.countDocuments(query);
 
-    const [employees, total] = await Promise.all([employeesPromise, countPromise]);
+    const [employeesRaw, total] = await Promise.all([employeesPromise, countPromise]);
     const totalPages = Math.ceil(total / Number(limit));
+
+    // Compute `age` for each employee
+    const employees = employeesRaw.map((emp) => {
+      const computed = computeAge(emp.dateOfBirth);
+      emp.age = computed !== null ? computed : 'N/A';
+      return emp;
+    });
 
     return res.status(200).json({ employees, totalPages });
   } catch (error) {
@@ -126,9 +193,21 @@ exports.getEmployees = async (req, res) => {
 exports.getEmployeeById = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const employee = await Employee.findOne({ _id: employeeId, organizationId: req.user.orgId });
-    if (!employee) return res.status(404).json({ message: 'Employee not found' });
-    return res.status(200).json({ employee });
+    // Use .lean() to allow direct object manipulation
+    const employeeRaw = await Employee.findOne({
+      _id: employeeId,
+      organizationId: req.user.orgId
+    }).lean();
+
+    if (!employeeRaw) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Compute age
+    const computed = computeAge(employeeRaw.dateOfBirth);
+    employeeRaw.age = computed !== null ? computed : 'N/A';
+
+    return res.status(200).json({ employee: employeeRaw });
   } catch (error) {
     console.error('Error fetching employee:', error);
     return res.status(500).json({ message: 'Server error fetching employee' });
@@ -142,12 +221,14 @@ exports.updateEmployee = async (req, res) => {
   try {
     const { employeeId } = req.params;
     const updates = req.body;
-    
-    // --- If payStructure present, do dailyRates logic + ensure otherConsiderations arrays. ---
+
+    // If payStructure present, validate constraints first
     if (updates.payStructure) {
+      validatePayStructureConstraints(updates.payStructure);
+
+      // Then do dailyRates logic + ensure otherConsiderations arrays
       if (updates.payStructure.dailyRates) {
         const dr = updates.payStructure.dailyRates;
-
         // NI Daily Rates
         if (dr.niDayMode === 'NONE') {
           dr.niRates = {
@@ -161,7 +242,6 @@ exports.updateEmployee = async (req, res) => {
           dr.niRates.extraDayRate = 0;
           dr.niRates.extraShiftRate = 0;
         }
-
         // Cash Daily Rates
         if (dr.cashDayMode === 'NONE') {
           dr.cashRates = {
@@ -173,7 +253,6 @@ exports.updateEmployee = async (req, res) => {
         }
       }
 
-      // If hasOtherConsiderations, ensure arrays exist
       if (updates.payStructure.hasOtherConsiderations) {
         if (!updates.payStructure.otherConsiderations) {
           updates.payStructure.otherConsiderations = {};
@@ -194,14 +273,18 @@ exports.updateEmployee = async (req, res) => {
       updates,
       { new: true }
     );
-    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
     return res.status(200).json({
       message: 'Employee updated successfully',
       employee
     });
   } catch (error) {
     console.error('Error updating employee:', error);
-    return res.status(500).json({ message: 'Server error updating employee' });
+    // If it's a validation error from our code, respond 400
+    return res.status(400).json({ message: error.message });
   }
 };
 
@@ -211,8 +294,13 @@ exports.updateEmployee = async (req, res) => {
 exports.deleteEmployee = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const employee = await Employee.findOneAndDelete({ _id: employeeId, organizationId: req.user.orgId });
-    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    const employee = await Employee.findOneAndDelete({
+      _id: employeeId,
+      organizationId: req.user.orgId
+    });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
     return res.status(200).json({ message: 'Employee deleted successfully' });
   } catch (error) {
     console.error('Error deleting employee:', error);
@@ -253,11 +341,49 @@ function parsePairs(str) {
     } else {
       // No colon found: treat the whole item as the amount.
       return {
-        name: '', // or you could set a default like 'Other'
+        name: '',
         amount: Number(item) || 0
       };
     }
   });
+}
+
+/**
+ * The same pay-structure constraints logic
+ */
+function validatePayStructureConstraints(payStructure) {
+  if (!payStructure) return;
+
+  // #1: hasDailyRates vs hasHourlyRates
+  if (payStructure.hasDailyRates && payStructure.hasHourlyRates) {
+    throw new Error(
+      'Invalid pay structure: cannot have both "hasDailyRates" and "hasHourlyRates" set to true.'
+    );
+  }
+
+  // #2: niDayMode == 'ALL' vs cashDayMode == 'ALL'
+  if (
+    payStructure.dailyRates &&
+    payStructure.dailyRates.niDayMode === 'ALL' &&
+    payStructure.dailyRates.cashDayMode === 'ALL'
+  ) {
+    throw new Error(
+      'Invalid pay structure: cannot set niDayMode = ALL and cashDayMode = ALL simultaneously.'
+    );
+  }
+
+  // #3: niHoursMode == 'ALL' or 'CUSTOM' vs cashHoursMode == 'ALL'
+  if (payStructure.hourlyRates) {
+    const niMode = payStructure.hourlyRates.niHoursMode || 'NONE';
+    const cashMode = payStructure.hourlyRates.cashHoursMode || 'NONE';
+
+    const niIsAllOrCustom = niMode === 'ALL' || niMode === 'CUSTOM';
+    if (niIsAllOrCustom && cashMode === 'ALL') {
+      throw new Error(
+        'Invalid pay structure: cannot set niHoursMode = ALL or CUSTOM and cashHoursMode = ALL at the same time.'
+      );
+    }
+  }
 }
 
 /**
@@ -273,6 +399,7 @@ exports.batchCreateEmployees = async (req, res) => {
     }
 
     const createdEmployees = [];
+
     for (const empData of employees) {
       empData.organizationId = orgId;
 
@@ -343,6 +470,9 @@ exports.batchCreateEmployees = async (req, res) => {
         }
       };
 
+      // Validate constraints
+      validatePayStructureConstraints(empData.payStructure);
+
       // Remove flat fields so they aren’t duplicated in the payload
       [
         'payStructureName','niDayMode','ni_regularDays','ni_regularDayRate',
@@ -364,9 +494,8 @@ exports.batchCreateEmployees = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in batch creating employees:', error);
-    return res.status(500).json({
-      message: 'Error in batch creating employees',
-      error: error.message
+    return res.status(400).json({
+      message: error.message || 'Error in batch creating employees'
     });
   }
 };
@@ -418,7 +547,7 @@ exports.batchUpdateEmployees = async (req, res) => {
         updateData.hasOtherConsiderations = updateData.hasOtherConsiderations.toLowerCase() === 'true';
       }
 
-      // If any pay structure related fields exist, nest them into payStructure
+      // If any pay structure fields exist, build payStructure
       if (
         updateData.payStructureName ||
         updateData.niDayMode ||
@@ -488,9 +617,12 @@ exports.batchUpdateEmployees = async (req, res) => {
             cashDeductions: parsePairs(updateData.cashDeductions),
           }
         };
+
+        // Validate constraints
+        validatePayStructureConstraints(updateData.payStructure);
       }
 
-      // Remove flat fields so they won’t be duplicated in the payload
+      // Remove flat fields from top-level
       [
         'payStructureName','niDayMode','ni_regularDays','ni_regularDayRate',
         'ni_extraDayRate','ni_extraShiftRate','cashDayMode','cash_regularDays',
@@ -517,9 +649,8 @@ exports.batchUpdateEmployees = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in batch updating employees:', error);
-    return res.status(500).json({
-      message: 'Error in batch updating employees',
-      error: error.message
+    return res.status(400).json({
+      message: error.message || 'Error in batch updating employees'
     });
   }
 };

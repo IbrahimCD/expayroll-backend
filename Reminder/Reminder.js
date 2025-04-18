@@ -1,3 +1,5 @@
+// models/Reminder.js
+
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -14,6 +16,16 @@ const CommentSchema = new Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
+/**
+ * autoType can be one of:
+ * - 'MANUAL' (the default for user-created reminders)
+ * - 'AUTO_18_BDAY'
+ * - 'AUTO_21_BDAY'
+ * - 'AUTO_14DAY_COMMENCE'
+ * - 'AUTO_84DAY_COMMENCE'
+ * 
+ * This helps us identify which milestone the reminder corresponds to.
+ */
 const ReminderSchema = new Schema(
   {
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
@@ -31,7 +43,20 @@ const ReminderSchema = new Schema(
     recurrenceInterval: { type: String, enum: ['daily', 'weekly', 'monthly'], default: null },
     attachments: [String], // array of file URLs
     comments: [CommentSchema],
-    auditLogs: [AuditLogSchema]
+    auditLogs: [AuditLogSchema],
+
+    // NEW FIELD: This marks whether the reminder was automatically generated for a certain milestone
+    autoType: {
+      type: String,
+      enum: [
+        'MANUAL',
+        'AUTO_18_BDAY',
+        'AUTO_21_BDAY',
+        'AUTO_14DAY_COMMENCE',
+        'AUTO_84DAY_COMMENCE'
+      ],
+      default: 'MANUAL'
+    }
   },
   { timestamps: true }
 );

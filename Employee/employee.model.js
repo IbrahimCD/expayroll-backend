@@ -59,11 +59,30 @@ const employeeSchema = new Schema({
   preferredName: { type: String },
   gender: { type: String, default: 'Other' },
   dateOfBirth: { type: Date },
+    // NEW FIELDS:
+    title: {
+      type: String,
+      enum: ['Mr', 'Mrs', 'Ms', 'Miss', 'Dr', 'Other', ''],
+      default: ''
+    },
+    commencementDate: {
+      type: Date,
+      default: null
+    },
   mobileNo: { type: String },
   email: { type: String, required: true, unique: true },
   address: { type: String },
   payrollId: { type: String },
   status: { type: String, default: 'Employed' },
+    // ─────────────── NEW OPTIONAL FIELDS ────────────────
+  title: {
+    type: String,
+    enum: ['Mr', 'Md', 'Mrs', 'Miss'],
+    default: ''          // keep blank when not provided
+  },
+  commencementDate: {     // date employee actually started
+    type: Date
+  },
   baseLocationId: { type: Schema.Types.ObjectId, ref: 'Location' },
   locationAccess: [{ type: Schema.Types.ObjectId, ref: 'Location' }],
   organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
