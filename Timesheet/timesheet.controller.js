@@ -73,7 +73,8 @@ exports.createTimesheet = async (req, res) => {
 exports.getTimesheets = async (req, res) => {
   try {
     const { orgId } = req.user;
-    const timesheets = await Timesheet.find({ organizationId: orgId });
+    const timesheets = await Timesheet.find({ organizationId: orgId })
+      .sort({ createdAt: -1 }); // Sort by creation date, newest first
     return res.status(200).json({ timesheets });
   } catch (error) {
     console.error('Error fetching timesheets:', error);
