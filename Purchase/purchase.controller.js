@@ -57,12 +57,13 @@ exports.createSupplier = async (req, res) => {
 };
 
 /**
- * Get all suppliers for a location
+ * Get all suppliers for a location (with pagination and search)
  */
 exports.getSuppliers = async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const { locationId } = req.params;
+    let { page = 1, limit = 20, search, sortBy = 'name', sortOrder = 'asc' } = req.query;
 
     if (!locationId) {
       return res.status(400).json({ message: 'locationId is required.' });
@@ -74,12 +75,43 @@ exports.getSuppliers = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    const suppliers = await Supplier.find({
+    // Parse pagination parameters
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    // Build query
+    const query = {
       organizationId: orgId,
       locationId
-    }).sort({ name: 1 });
+    };
 
-    return res.status(200).json(suppliers);
+    // Search filter
+    if (search) {
+      query.name = { $regex: search, $options: 'i' };
+    }
+
+    // Sort configuration
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Count total matching documents
+    const total = await Supplier.countDocuments(query);
+
+    // Fetch suppliers with pagination
+    const suppliers = await Supplier.find(query)
+      .sort(sort)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    return res.status(200).json({
+      data: suppliers,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit
+      }
+    });
   } catch (error) {
     console.error('Error fetching suppliers:', error);
     return res.status(500).json({ message: 'Server error fetching suppliers.' });
@@ -232,12 +264,13 @@ exports.createProduct = async (req, res) => {
 };
 
 /**
- * Get all products for a location
+ * Get all products for a location (with pagination, search, and filters)
  */
 exports.getProducts = async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const { locationId } = req.params;
+    let { page = 1, limit = 20, search, supplier, minPrice, maxPrice, sortBy = 'name', sortOrder = 'asc' } = req.query;
 
     if (!locationId) {
       return res.status(400).json({ message: 'locationId is required.' });
@@ -249,14 +282,60 @@ exports.getProducts = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    const products = await Product.find({
+    // Parse pagination parameters
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    // Build query
+    const query = {
       organizationId: orgId,
       locationId
-    })
-      .populate('supplierId', 'name')
-      .sort({ name: 1 });
+    };
 
-    return res.status(200).json(products);
+    // Search filter by product name
+    if (search) {
+      query.name = { $regex: search, $options: 'i' };
+    }
+
+    // Filter by supplier
+    if (supplier) {
+      query.supplierId = supplier;
+    }
+
+    // Price range filters
+    if (minPrice || maxPrice) {
+      query.defaultUnitPrice = {};
+      if (minPrice) {
+        query.defaultUnitPrice.$gte = parseFloat(minPrice);
+      }
+      if (maxPrice) {
+        query.defaultUnitPrice.$lte = parseFloat(maxPrice);
+      }
+    }
+
+    // Sort configuration
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Count total matching documents
+    const total = await Product.countDocuments(query);
+
+    // Fetch products with pagination
+    const products = await Product.find(query)
+      .populate('supplierId', 'name')
+      .sort(sort)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    return res.status(200).json({
+      data: products,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit
+      }
+    });
   } catch (error) {
     console.error('Error fetching products:', error);
     return res.status(500).json({ message: 'Server error fetching products.' });
@@ -598,12 +677,13 @@ exports.createInvoice = async (req, res) => {
 };
 
 /**
- * Get all invoices for a location
+ * Get all invoices for a location (with pagination, search, and filters)
  */
 exports.getInvoices = async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const { locationId } = req.params;
+    let { page = 1, limit = 20, search, supplier, startDate, endDate, minTotal, maxTotal, sortBy = 'date', sortOrder = 'desc' } = req.query;
 
     if (!locationId) {
       return res.status(400).json({ message: 'locationId is required.' });
@@ -615,14 +695,103 @@ exports.getInvoices = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    const invoices = await Invoice.find({
+    // Parse pagination parameters
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    // Build query
+    const query = {
       organizationId: orgId,
       locationId
-    })
-      .populate('supplierId', 'name')
-      .sort({ createdAt: -1 });
+    };
 
-    return res.status(200).json(invoices);
+    // Filter by supplier
+    if (supplier) {
+      query.supplierId = supplier;
+    }
+
+    // Date range filters
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) {
+        query.date.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        query.date.$lte = new Date(endDate);
+      }
+    }
+
+    // Total amount range filters
+    if (minTotal || maxTotal) {
+      query.total = {};
+      if (minTotal) {
+        query.total.$gte = parseFloat(minTotal);
+      }
+      if (maxTotal) {
+        query.total.$lte = parseFloat(maxTotal);
+      }
+    }
+
+    // If searching by supplier name, we need to find matching suppliers first
+    if (search) {
+      const matchingSuppliers = await Supplier.find({
+        name: { $regex: search, $options: 'i' },
+        organizationId: orgId,
+        locationId: locationId
+      }).select('_id');
+      const supplierIds = matchingSuppliers.map(s => s._id);
+      if (supplierIds.length === 0) {
+        // No matching suppliers, return empty result
+        return res.status(200).json({
+          data: [],
+          pagination: {
+            total: 0,
+            page,
+            pages: 0,
+            limit
+          }
+        });
+      }
+      query.supplierId = { $in: supplierIds };
+    }
+
+    // Count total matching documents
+    const total = await Invoice.countDocuments(query);
+
+    // Fetch invoices with pagination
+    let invoices = await Invoice.find(query)
+      .populate('supplierId', 'name')
+      .populate('locationId', 'name code')
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    // Sort configuration (determine which field to sort by)
+    if (sortBy === 'date') {
+      invoices = invoices.sort((a, b) => {
+        const comparison = new Date(a.date) - new Date(b.date);
+        return sortOrder === 'desc' ? -comparison : comparison;
+      });
+    } else if (sortBy === 'total') {
+      invoices = invoices.sort((a, b) => {
+        const comparison = a.total - b.total;
+        return sortOrder === 'desc' ? -comparison : comparison;
+      });
+    } else if (sortBy === 'createdAt') {
+      invoices = invoices.sort((a, b) => {
+        const comparison = new Date(a.createdAt) - new Date(b.createdAt);
+        return sortOrder === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    return res.status(200).json({
+      data: invoices,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit
+      }
+    });
   } catch (error) {
     console.error('Error fetching invoices:', error);
     return res.status(500).json({ message: 'Server error fetching invoices.' });
