@@ -922,3 +922,43 @@ exports.generateInvoiceCSV = async (req, res) => {
   }
 };
 
+/**
+ * Generate PDF for an invoice
+ */
+exports.generateInvoicePDF = async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid invoice ID format.' });
+    }
+
+    const invoice = await Invoice.findOne({
+      _id: id,
+      organizationId: orgId
+    })
+      .populate('supplierId', 'name')
+      .populate('locationId', 'name code');
+
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found.' });
+    }
+
+    // Return invoice data as JSON - PDF will be generated on frontend
+    res.status(200).json({
+      invoice: {
+        date: invoice.date,
+        supplier: invoice.supplierId?.name || 'Unknown',
+        location: invoice.locationId?.name || 'Unknown',
+        locationCode: invoice.locationId?.code || '',
+        items: invoice.items,
+        total: invoice.total
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching invoice for PDF:', error);
+    return res.status(500).json({ message: 'Server error generating invoice PDF.' });
+  }
+};
+

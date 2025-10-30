@@ -24,6 +24,7 @@ router.get('/invoices/:locationId', protect, purchaseController.getInvoices);
 router.get('/invoices/:id/details', protect, purchaseController.getInvoiceById);
 router.delete('/invoices/:id', protect, purchaseController.deleteInvoice);
 router.get('/invoices/:id/csv', protect, purchaseController.generateInvoiceCSV);
+router.get('/invoices/:id/pdf', protect, purchaseController.generateInvoicePDF);
 
 module.exports = router;
 
