@@ -962,3 +962,215 @@ exports.generateInvoicePDF = async (req, res) => {
   }
 };
 
+/**
+ * Bulk update products
+ */
+exports.bulkUpdateProducts = async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    const { locationId, products } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({ message: 'locationId is required.' });
+    }
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: 'Products array is required and must not be empty.' });
+    }
+
+    // Validate location
+    const validation = await validateLocation(orgId, locationId);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    const successfulUpdates = [];
+    const failedUpdates = [];
+
+    // Process each product
+    for (let i = 0; i < products.length; i++) {
+      const productData = products[i];
+      
+      try {
+        // Validate required fields
+        if (!productData.productId || !productData.productId.trim()) {
+          failedUpdates.push({
+            row: i + 1,
+            productId: productData.productId || '',
+            supplier: productData.supplier || '',
+            name: productData.name || '',
+            defaultUnitPrice: productData.defaultUnitPrice || 0,
+            rebateAmount: productData.rebateAmount || 0,
+            error: 'Product ID is required for updates.'
+          });
+          continue;
+        }
+
+        if (!productData.supplier || !productData.supplier.trim()) {
+          failedUpdates.push({
+            row: i + 1,
+            productId: productData.productId,
+            supplier: productData.supplier || '',
+            name: productData.name || '',
+            defaultUnitPrice: productData.defaultUnitPrice || 0,
+            rebateAmount: productData.rebateAmount || 0,
+            error: 'Supplier name is required.'
+          });
+          continue;
+        }
+
+        if (!productData.name || !productData.name.trim()) {
+          failedUpdates.push({
+            row: i + 1,
+            productId: productData.productId,
+            supplier: productData.supplier,
+            name: productData.name || '',
+            defaultUnitPrice: productData.defaultUnitPrice || 0,
+            rebateAmount: productData.rebateAmount || 0,
+            error: 'Product name is required.'
+          });
+          continue;
+        }
+
+        // Validate numeric values
+        const defaultUnitPrice = parseFloat(productData.defaultUnitPrice);
+        const rebateAmount = parseFloat(productData.rebateAmount);
+
+        if (isNaN(defaultUnitPrice) || defaultUnitPrice < 0) {
+          failedUpdates.push({
+            row: i + 1,
+            productId: productData.productId,
+            supplier: productData.supplier,
+            name: productData.name,
+            defaultUnitPrice: productData.defaultUnitPrice,
+            rebateAmount: productData.rebateAmount,
+            error: 'Invalid default unit price. Must be a number >= 0.'
+          });
+          continue;
+        }
+
+        if (isNaN(rebateAmount) || rebateAmount < 0) {
+          failedUpdates.push({
+            row: i + 1,
+            productId: productData.productId,
+            supplier: productData.supplier,
+            name: productData.name,
+            defaultUnitPrice: productData.defaultUnitPrice,
+            rebateAmount: productData.rebateAmount,
+            error: 'Invalid rebate amount. Must be a number >= 0.'
+          });
+          continue;
+        }
+
+        // Find the product
+        const product = await Product.findOne({
+          _id: productData.productId,
+          organizationId: orgId,
+          locationId
+        });
+
+        if (!product) {
+          failedUpdates.push({
+            row: i + 1,
+            productId: productData.productId,
+            supplier: productData.supplier,
+            name: productData.name,
+            defaultUnitPrice: productData.defaultUnitPrice,
+            rebateAmount: productData.rebateAmount,
+            error: 'Product not found or does not belong to this location.'
+          });
+          continue;
+        }
+
+        // Find or create supplier (case-insensitive)
+        const supplierName = productData.supplier.trim();
+        let supplier = await Supplier.findOne({
+          name: { $regex: new RegExp(`^${supplierName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          organizationId: orgId,
+          locationId
+        });
+
+        if (!supplier) {
+          // Create supplier if it doesn't exist
+          supplier = await Supplier.create({
+            name: supplierName,
+            organizationId: orgId,
+            locationId
+          });
+        }
+
+        // Check if new name conflicts with existing product from same supplier
+        if (productData.name.trim() !== product.name || supplier._id.toString() !== product.supplierId.toString()) {
+          const existingProduct = await Product.findOne({
+            name: productData.name.trim(),
+            supplierId: supplier._id,
+            locationId,
+            organizationId: orgId,
+            _id: { $ne: product._id }
+          });
+
+          if (existingProduct) {
+            failedUpdates.push({
+              row: i + 1,
+              productId: productData.productId,
+              supplier: productData.supplier,
+              name: productData.name,
+              defaultUnitPrice: productData.defaultUnitPrice,
+              rebateAmount: productData.rebateAmount,
+              error: 'A product with this name already exists for this supplier.'
+            });
+            continue;
+          }
+        }
+
+        // Update product
+        product.name = productData.name.trim();
+        product.supplierId = supplier._id;
+        product.defaultUnitPrice = defaultUnitPrice;
+        product.rebateAmount = rebateAmount;
+        await product.save();
+
+        successfulUpdates.push({
+          productId: product._id,
+          supplier: supplier.name,
+          name: product.name,
+          defaultUnitPrice: product.defaultUnitPrice,
+          rebateAmount: product.rebateAmount
+        });
+
+      } catch (error) {
+        // Handle errors
+        let errorMessage = 'Unknown error occurred.';
+        
+        if (error.code === 11000) {
+          errorMessage = 'Product with this name already exists for this supplier and location.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        failedUpdates.push({
+          row: i + 1,
+          productId: productData.productId || '',
+          supplier: productData.supplier || '',
+          name: productData.name || '',
+          defaultUnitPrice: productData.defaultUnitPrice || 0,
+          rebateAmount: productData.rebateAmount || 0,
+          error: errorMessage
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      updated: successfulUpdates.length,
+      failed: failedUpdates.length,
+      successfulUpdates,
+      failedUpdates
+    });
+
+  } catch (error) {
+    console.error('Error in bulk updating products:', error);
+    return res.status(500).json({ message: 'Server error in bulk updating products.' });
+  }
+};
+

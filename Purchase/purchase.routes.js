@@ -17,6 +17,7 @@ router.get('/products/supplier/:supplierId/:locationId', protect, purchaseContro
 router.put('/products/:id', protect, purchaseController.updateProduct);
 router.delete('/products/:id', protect, purchaseController.deleteProduct);
 router.post('/products/bulk-create', protect, purchaseController.bulkCreateProducts);
+router.post('/products/bulk-update', protect, purchaseController.bulkUpdateProducts);
 
 // Invoices routes
 router.post('/invoices', protect, purchaseController.createInvoice);
