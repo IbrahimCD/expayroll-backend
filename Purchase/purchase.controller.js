@@ -147,6 +147,23 @@ exports.deleteSupplier = async (req, res) => {
       return res.status(404).json({ message: 'Supplier not found.' });
     }
 
+    // Check if any products from this supplier are used in invoices
+    const products = await Product.find({ supplierId: id, organizationId: orgId });
+    const productIds = products.map(p => p._id);
+    
+    if (productIds.length > 0) {
+      const invoicesWithProducts = await Invoice.countDocuments({
+        organizationId: orgId,
+        'items.productId': { $in: productIds }
+      });
+
+      if (invoicesWithProducts > 0) {
+        return res.status(400).json({
+          message: 'Cannot delete supplier. Some products from this supplier are used in existing invoices.'
+        });
+      }
+    }
+
     // Delete all products associated with this supplier
     await Product.deleteMany({ supplierId: id, organizationId: orgId });
 
@@ -371,6 +388,160 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
+// ==================== BULK PRODUCT CREATION ====================
+
+/**
+ * Bulk create products with auto supplier creation
+ */
+exports.bulkCreateProducts = async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    const { locationId, products } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({ message: 'locationId is required.' });
+    }
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: 'Products array is required and must not be empty.' });
+    }
+
+    // Validate location
+    const validation = await validateLocation(orgId, locationId);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    const successfulProducts = [];
+    const failedProducts = [];
+
+    // Process each product
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      
+      try {
+        // Validate required fields
+        if (!product.supplier || !product.supplier.trim()) {
+          failedProducts.push({
+            row: i + 1,
+            supplier: product.supplier || '',
+            name: product.name || '',
+            defaultUnitPrice: product.defaultUnitPrice || 0,
+            rebateAmount: product.rebateAmount || 0,
+            error: 'Supplier name is required.'
+          });
+          continue;
+        }
+
+        if (!product.name || !product.name.trim()) {
+          failedProducts.push({
+            row: i + 1,
+            supplier: product.supplier,
+            name: product.name || '',
+            defaultUnitPrice: product.defaultUnitPrice || 0,
+            rebateAmount: product.rebateAmount || 0,
+            error: 'Product name is required.'
+          });
+          continue;
+        }
+
+        // Validate numeric values
+        const defaultUnitPrice = parseFloat(product.defaultUnitPrice);
+        const rebateAmount = parseFloat(product.rebateAmount);
+
+        if (isNaN(defaultUnitPrice) || defaultUnitPrice < 0) {
+          failedProducts.push({
+            row: i + 1,
+            supplier: product.supplier,
+            name: product.name,
+            defaultUnitPrice: product.defaultUnitPrice,
+            rebateAmount: product.rebateAmount,
+            error: 'Invalid default unit price. Must be a number >= 0.'
+          });
+          continue;
+        }
+
+        if (isNaN(rebateAmount) || rebateAmount < 0) {
+          failedProducts.push({
+            row: i + 1,
+            supplier: product.supplier,
+            name: product.name,
+            defaultUnitPrice: product.defaultUnitPrice,
+            rebateAmount: product.rebateAmount,
+            error: 'Invalid rebate amount. Must be a number >= 0.'
+          });
+          continue;
+        }
+
+        // Find or create supplier (case-insensitive)
+        const supplierName = product.supplier.trim();
+        let supplier = await Supplier.findOne({
+          name: { $regex: new RegExp(`^${supplierName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          organizationId: orgId,
+          locationId
+        });
+
+        if (!supplier) {
+          // Create supplier
+          supplier = await Supplier.create({
+            name: supplierName,
+            organizationId: orgId,
+            locationId
+          });
+        }
+
+        // Create product
+        const newProduct = await Product.create({
+          name: product.name.trim(),
+          supplierId: supplier._id,
+          defaultUnitPrice,
+          rebateAmount,
+          organizationId: orgId,
+          locationId
+        });
+
+        successfulProducts.push({
+          supplier: supplier.name,
+          name: newProduct.name,
+          defaultUnitPrice: newProduct.defaultUnitPrice,
+          rebateAmount: newProduct.rebateAmount
+        });
+
+      } catch (error) {
+        // Handle duplicate products or other errors
+        let errorMessage = 'Unknown error occurred.';
+        
+        if (error.code === 11000) {
+          errorMessage = 'Product with this name already exists for this supplier and location.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        failedProducts.push({
+          row: i + 1,
+          supplier: product.supplier || '',
+          name: product.name || '',
+          defaultUnitPrice: product.defaultUnitPrice || 0,
+          rebateAmount: product.rebateAmount || 0,
+          error: errorMessage
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      created: successfulProducts.length,
+      failed: failedProducts.length,
+      successfulProducts,
+      failedProducts
+    });
+
+  } catch (error) {
+    console.error('Error in bulk creating products:', error);
+    return res.status(500).json({ message: 'Server error in bulk creating products.' });
+  }
+};
+
 // ==================== INVOICES ====================
 
 /**
@@ -473,7 +644,9 @@ exports.getInvoiceById = async (req, res) => {
     const invoice = await Invoice.findOne({
       _id: id,
       organizationId: orgId
-    }).populate('supplierId', 'name');
+    })
+      .populate('supplierId', 'name')
+      .populate('locationId', 'name code');
 
     if (!invoice) {
       return res.status(404).json({ message: 'Invoice not found.' });
