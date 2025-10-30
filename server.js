@@ -14,6 +14,7 @@ const nictaxRoutes = require('./NICTax/nictax.routes');
 const reportsRoutes = require('./Reports/reports.routes');
 const employeeWageReportRoutes = require('./EmployeeWageReport/employeeWageReport.routes');
 const remindersRoute = require('./Reminder/reminders');
+const purchaseRoutes = require('./Purchase/purchase.routes');
 const { scheduleDailyAutoReminders } = require('./cronJobs/autoReminders');
 
 const app = express();
@@ -46,6 +47,7 @@ app.use('/nictax', nictaxRoutes);
 app.use('/reports', reportsRoutes);
 app.use('/employee-wage-report', employeeWageReportRoutes);
 app.use('/reminders', remindersRoute);
+app.use('/purchases', purchaseRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
