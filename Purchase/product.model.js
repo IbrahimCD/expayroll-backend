@@ -9,6 +9,11 @@ const productSchema = new Schema(
       required: true,
       trim: true
     },
+    category: {
+      type: String,
+      trim: true,
+      default: ''
+    },
     supplierId: {
       type: Schema.Types.ObjectId,
       ref: 'Supplier',
@@ -30,20 +35,15 @@ const productSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Organization',
       required: true
-    },
-    locationId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Location',
-      required: true
     }
+    // locationId removed - products are now organization-wide
   },
   {
     timestamps: true
   }
 );
 
-// Compound index to ensure unique product names per supplier within a location
-productSchema.index({ name: 1, supplierId: 1, locationId: 1, organizationId: 1 }, { unique: true });
+// Compound index to ensure unique product names per supplier within an organization (not per location)
+productSchema.index({ name: 1, supplierId: 1, organizationId: 1 }, { unique: true });
 
 module.exports = model('Product', productSchema);
-

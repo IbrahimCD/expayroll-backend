@@ -20,27 +20,20 @@ async function validateLocation(orgId, locationId) {
 // ==================== SUPPLIERS ====================
 
 /**
- * Create a new supplier
+ * Create a new supplier (organization-wide)
  */
 exports.createSupplier = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { name, locationId } = req.body;
+    const { name } = req.body;
 
-    if (!name || !locationId) {
-      return res.status(400).json({ message: 'Name and locationId are required.' });
-    }
-
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
+    if (!name) {
+      return res.status(400).json({ message: 'Name is required.' });
     }
 
     const supplier = await Supplier.create({
       name: name.trim(),
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     });
 
     return res.status(201).json({
@@ -49,7 +42,7 @@ exports.createSupplier = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ message: 'Supplier with this name already exists for this location.' });
+      return res.status(400).json({ message: 'Supplier with this name already exists.' });
     }
     console.error('Error creating supplier:', error);
     return res.status(500).json({ message: 'Server error creating supplier.' });
@@ -57,32 +50,20 @@ exports.createSupplier = async (req, res) => {
 };
 
 /**
- * Get all suppliers for a location (with pagination and search)
+ * Get all suppliers for organization (with pagination and search)
  */
 exports.getSuppliers = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { locationId } = req.params;
     let { page = 1, limit = 20, search, sortBy = 'name', sortOrder = 'asc' } = req.query;
-
-    if (!locationId) {
-      return res.status(400).json({ message: 'locationId is required.' });
-    }
-
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
-    }
 
     // Parse pagination parameters
     page = parseInt(page);
     limit = parseInt(limit);
 
-    // Build query
+    // Build query - organization-wide
     const query = {
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     };
 
     // Search filter
@@ -125,18 +106,10 @@ exports.updateSupplier = async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const { id } = req.params;
-    const { name, locationId } = req.body;
+    const { name } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid supplier ID format.' });
-    }
-
-    // If locationId is being changed, validate it
-    if (locationId) {
-      const validation = await validateLocation(orgId, locationId);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
-      }
     }
 
     const supplier = await Supplier.findOne({ _id: id, organizationId: orgId });
@@ -145,7 +118,6 @@ exports.updateSupplier = async (req, res) => {
     }
 
     if (name) supplier.name = name.trim();
-    if (locationId) supplier.locationId = locationId;
 
     await supplier.save();
 
@@ -155,7 +127,7 @@ exports.updateSupplier = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ message: 'Supplier with this name already exists for this location.' });
+      return res.status(400).json({ message: 'Supplier with this name already exists.' });
     }
     console.error('Error updating supplier:', error);
     return res.status(500).json({ message: 'Server error updating supplier.' });
@@ -214,40 +186,33 @@ exports.deleteSupplier = async (req, res) => {
 // ==================== PRODUCTS ====================
 
 /**
- * Create a new product
+ * Create a new product (organization-wide)
  */
 exports.createProduct = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { name, supplierId, defaultUnitPrice, rebateAmount, locationId } = req.body;
+    const { name, supplierId, defaultUnitPrice, rebateAmount, category } = req.body;
 
-    if (!name || !supplierId || !locationId) {
-      return res.status(400).json({ message: 'Name, supplierId, and locationId are required.' });
+    if (!name || !supplierId) {
+      return res.status(400).json({ message: 'Name and supplierId are required.' });
     }
 
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
-    }
-
-    // Validate supplier belongs to same org and location
+    // Validate supplier belongs to same org
     const supplier = await Supplier.findOne({
       _id: supplierId,
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     });
     if (!supplier) {
-      return res.status(400).json({ message: 'Supplier not found or does not belong to this location.' });
+      return res.status(400).json({ message: 'Supplier not found.' });
     }
 
     const product = await Product.create({
       name: name.trim(),
+      category: category ? category.trim() : '',
       supplierId,
       defaultUnitPrice: defaultUnitPrice || 0,
       rebateAmount: rebateAmount || 0,
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     });
 
     return res.status(201).json({
@@ -256,7 +221,7 @@ exports.createProduct = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ message: 'Product with this name already exists for this supplier and location.' });
+      return res.status(400).json({ message: 'Product with this name already exists for this supplier.' });
     }
     console.error('Error creating product:', error);
     return res.status(500).json({ message: 'Server error creating product.' });
@@ -264,32 +229,20 @@ exports.createProduct = async (req, res) => {
 };
 
 /**
- * Get all products for a location (with pagination, search, and filters)
+ * Get all products for organization (with pagination, search, and filters)
  */
 exports.getProducts = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { locationId } = req.params;
-    let { page = 1, limit = 20, search, supplier, minPrice, maxPrice, sortBy = 'name', sortOrder = 'asc' } = req.query;
-
-    if (!locationId) {
-      return res.status(400).json({ message: 'locationId is required.' });
-    }
-
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
-    }
+    let { page = 1, limit = 20, search, supplier, category, minPrice, maxPrice, sortBy = 'name', sortOrder = 'asc' } = req.query;
 
     // Parse pagination parameters
     page = parseInt(page);
     limit = parseInt(limit);
 
-    // Build query
+    // Build query - organization-wide
     const query = {
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     };
 
     // Search filter by product name
@@ -300,6 +253,11 @@ exports.getProducts = async (req, res) => {
     // Filter by supplier
     if (supplier) {
       query.supplierId = supplier;
+    }
+
+    // Filter by category
+    if (category) {
+      query.category = { $regex: category, $options: 'i' };
     }
 
     // Price range filters
@@ -343,28 +301,21 @@ exports.getProducts = async (req, res) => {
 };
 
 /**
- * Get products by supplier
+ * Get products by supplier (organization-wide)
  */
 exports.getProductsBySupplier = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { supplierId, locationId } = req.params;
+    const { supplierId } = req.params;
 
-    if (!supplierId || !locationId) {
-      return res.status(400).json({ message: 'supplierId and locationId are required.' });
-    }
-
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
+    if (!supplierId) {
+      return res.status(400).json({ message: 'supplierId is required.' });
     }
 
     // Validate supplier
     const supplier = await Supplier.findOne({
       _id: supplierId,
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     });
     if (!supplier) {
       return res.status(404).json({ message: 'Supplier not found.' });
@@ -372,8 +323,7 @@ exports.getProductsBySupplier = async (req, res) => {
 
     const products = await Product.find({
       supplierId,
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     }).sort({ name: 1 });
 
     return res.status(200).json(products);
@@ -384,13 +334,32 @@ exports.getProductsBySupplier = async (req, res) => {
 };
 
 /**
+ * Get all categories for organization
+ */
+exports.getCategories = async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+
+    const categories = await Product.distinct('category', {
+      organizationId: orgId,
+      category: { $ne: '' }
+    });
+
+    return res.status(200).json(categories.sort());
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    return res.status(500).json({ message: 'Server error fetching categories.' });
+  }
+};
+
+/**
  * Update a product
  */
 exports.updateProduct = async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const { id } = req.params;
-    const { name, supplierId, defaultUnitPrice, rebateAmount, locationId } = req.body;
+    const { name, supplierId, defaultUnitPrice, rebateAmount, category } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid product ID format.' });
@@ -402,27 +371,20 @@ exports.updateProduct = async (req, res) => {
     }
 
     if (name) product.name = name.trim();
+    if (category !== undefined) product.category = category ? category.trim() : '';
     if (supplierId !== undefined) {
-      // Validate supplier belongs to same org and location
+      // Validate supplier belongs to same org
       const supplier = await Supplier.findOne({
         _id: supplierId,
-        organizationId: orgId,
-        locationId: locationId || product.locationId
+        organizationId: orgId
       });
       if (!supplier) {
-        return res.status(400).json({ message: 'Supplier not found or does not belong to this location.' });
+        return res.status(400).json({ message: 'Supplier not found.' });
       }
       product.supplierId = supplierId;
     }
     if (defaultUnitPrice !== undefined) product.defaultUnitPrice = defaultUnitPrice;
     if (rebateAmount !== undefined) product.rebateAmount = rebateAmount;
-    if (locationId) {
-      const validation = await validateLocation(orgId, locationId);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
-      }
-      product.locationId = locationId;
-    }
 
     await product.save();
 
@@ -432,7 +394,7 @@ exports.updateProduct = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ message: 'Product with this name already exists for this supplier and location.' });
+      return res.status(400).json({ message: 'Product with this name already exists for this supplier.' });
     }
     console.error('Error updating product:', error);
     return res.status(500).json({ message: 'Server error updating product.' });
@@ -456,6 +418,18 @@ exports.deleteProduct = async (req, res) => {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
+    // Check if product is used in any invoice
+    const invoicesWithProduct = await Invoice.countDocuments({
+      organizationId: orgId,
+      'items.productId': id
+    });
+
+    if (invoicesWithProduct > 0) {
+      return res.status(400).json({
+        message: 'Cannot delete product. It is used in existing invoices.'
+      });
+    }
+
     await Product.findByIdAndDelete(id);
 
     return res.status(200).json({
@@ -470,25 +444,15 @@ exports.deleteProduct = async (req, res) => {
 // ==================== BULK PRODUCT CREATION ====================
 
 /**
- * Bulk create products with auto supplier creation
+ * Bulk create products with auto supplier creation (organization-wide)
  */
 exports.bulkCreateProducts = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { locationId, products } = req.body;
-
-    if (!locationId) {
-      return res.status(400).json({ message: 'locationId is required.' });
-    }
+    const { products } = req.body;
 
     if (!products || !Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ message: 'Products array is required and must not be empty.' });
-    }
-
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
     }
 
     const successfulProducts = [];
@@ -505,6 +469,7 @@ exports.bulkCreateProducts = async (req, res) => {
             row: i + 1,
             supplier: product.supplier || '',
             name: product.name || '',
+            category: product.category || '',
             defaultUnitPrice: product.defaultUnitPrice || 0,
             rebateAmount: product.rebateAmount || 0,
             error: 'Supplier name is required.'
@@ -517,6 +482,7 @@ exports.bulkCreateProducts = async (req, res) => {
             row: i + 1,
             supplier: product.supplier,
             name: product.name || '',
+            category: product.category || '',
             defaultUnitPrice: product.defaultUnitPrice || 0,
             rebateAmount: product.rebateAmount || 0,
             error: 'Product name is required.'
@@ -533,6 +499,7 @@ exports.bulkCreateProducts = async (req, res) => {
             row: i + 1,
             supplier: product.supplier,
             name: product.name,
+            category: product.category || '',
             defaultUnitPrice: product.defaultUnitPrice,
             rebateAmount: product.rebateAmount,
             error: 'Invalid default unit price. Must be a number >= 0.'
@@ -545,6 +512,7 @@ exports.bulkCreateProducts = async (req, res) => {
             row: i + 1,
             supplier: product.supplier,
             name: product.name,
+            category: product.category || '',
             defaultUnitPrice: product.defaultUnitPrice,
             rebateAmount: product.rebateAmount,
             error: 'Invalid rebate amount. Must be a number >= 0.'
@@ -552,36 +520,35 @@ exports.bulkCreateProducts = async (req, res) => {
           continue;
         }
 
-        // Find or create supplier (case-insensitive)
+        // Find or create supplier (case-insensitive) - organization-wide
         const supplierName = product.supplier.trim();
         let supplier = await Supplier.findOne({
           name: { $regex: new RegExp(`^${supplierName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-          organizationId: orgId,
-          locationId
+          organizationId: orgId
         });
 
         if (!supplier) {
           // Create supplier
           supplier = await Supplier.create({
             name: supplierName,
-            organizationId: orgId,
-            locationId
+            organizationId: orgId
           });
         }
 
         // Create product
         const newProduct = await Product.create({
           name: product.name.trim(),
+          category: product.category ? product.category.trim() : '',
           supplierId: supplier._id,
           defaultUnitPrice,
           rebateAmount,
-          organizationId: orgId,
-          locationId
+          organizationId: orgId
         });
 
         successfulProducts.push({
           supplier: supplier.name,
           name: newProduct.name,
+          category: newProduct.category,
           defaultUnitPrice: newProduct.defaultUnitPrice,
           rebateAmount: newProduct.rebateAmount
         });
@@ -591,7 +558,7 @@ exports.bulkCreateProducts = async (req, res) => {
         let errorMessage = 'Unknown error occurred.';
         
         if (error.code === 11000) {
-          errorMessage = 'Product with this name already exists for this supplier and location.';
+          errorMessage = 'Product with this name already exists for this supplier.';
         } else if (error.message) {
           errorMessage = error.message;
         }
@@ -600,6 +567,7 @@ exports.bulkCreateProducts = async (req, res) => {
           row: i + 1,
           supplier: product.supplier || '',
           name: product.name || '',
+          category: product.category || '',
           defaultUnitPrice: product.defaultUnitPrice || 0,
           rebateAmount: product.rebateAmount || 0,
           error: errorMessage
@@ -624,7 +592,7 @@ exports.bulkCreateProducts = async (req, res) => {
 // ==================== INVOICES ====================
 
 /**
- * Create a new invoice
+ * Create a new invoice (location-specific, but uses org-wide suppliers/products)
  */
 exports.createInvoice = async (req, res) => {
   try {
@@ -641,14 +609,13 @@ exports.createInvoice = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    // Validate supplier belongs to same org and location
+    // Validate supplier belongs to same org (no longer location-specific)
     const supplier = await Supplier.findOne({
       _id: supplierId,
-      organizationId: orgId,
-      locationId
+      organizationId: orgId
     });
     if (!supplier) {
-      return res.status(400).json({ message: 'Supplier not found or does not belong to this location.' });
+      return res.status(400).json({ message: 'Supplier not found.' });
     }
 
     // Calculate total
@@ -736,8 +703,7 @@ exports.getInvoices = async (req, res) => {
     if (search) {
       const matchingSuppliers = await Supplier.find({
         name: { $regex: search, $options: 'i' },
-        organizationId: orgId,
-        locationId: locationId
+        organizationId: orgId
       }).select('_id');
       const supplierIds = matchingSuppliers.map(s => s._id);
       if (supplierIds.length === 0) {
@@ -963,25 +929,15 @@ exports.generateInvoicePDF = async (req, res) => {
 };
 
 /**
- * Bulk update products
+ * Bulk update products (organization-wide)
  */
 exports.bulkUpdateProducts = async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const { locationId, products } = req.body;
-
-    if (!locationId) {
-      return res.status(400).json({ message: 'locationId is required.' });
-    }
+    const { products } = req.body;
 
     if (!products || !Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ message: 'Products array is required and must not be empty.' });
-    }
-
-    // Validate location
-    const validation = await validateLocation(orgId, locationId);
-    if (!validation.valid) {
-      return res.status(400).json({ message: validation.message });
     }
 
     const successfulUpdates = [];
@@ -999,6 +955,7 @@ exports.bulkUpdateProducts = async (req, res) => {
             productId: productData.productId || '',
             supplier: productData.supplier || '',
             name: productData.name || '',
+            category: productData.category || '',
             defaultUnitPrice: productData.defaultUnitPrice || 0,
             rebateAmount: productData.rebateAmount || 0,
             error: 'Product ID is required for updates.'
@@ -1012,6 +969,7 @@ exports.bulkUpdateProducts = async (req, res) => {
             productId: productData.productId,
             supplier: productData.supplier || '',
             name: productData.name || '',
+            category: productData.category || '',
             defaultUnitPrice: productData.defaultUnitPrice || 0,
             rebateAmount: productData.rebateAmount || 0,
             error: 'Supplier name is required.'
@@ -1025,6 +983,7 @@ exports.bulkUpdateProducts = async (req, res) => {
             productId: productData.productId,
             supplier: productData.supplier,
             name: productData.name || '',
+            category: productData.category || '',
             defaultUnitPrice: productData.defaultUnitPrice || 0,
             rebateAmount: productData.rebateAmount || 0,
             error: 'Product name is required.'
@@ -1042,6 +1001,7 @@ exports.bulkUpdateProducts = async (req, res) => {
             productId: productData.productId,
             supplier: productData.supplier,
             name: productData.name,
+            category: productData.category || '',
             defaultUnitPrice: productData.defaultUnitPrice,
             rebateAmount: productData.rebateAmount,
             error: 'Invalid default unit price. Must be a number >= 0.'
@@ -1055,6 +1015,7 @@ exports.bulkUpdateProducts = async (req, res) => {
             productId: productData.productId,
             supplier: productData.supplier,
             name: productData.name,
+            category: productData.category || '',
             defaultUnitPrice: productData.defaultUnitPrice,
             rebateAmount: productData.rebateAmount,
             error: 'Invalid rebate amount. Must be a number >= 0.'
@@ -1062,11 +1023,10 @@ exports.bulkUpdateProducts = async (req, res) => {
           continue;
         }
 
-        // Find the product
+        // Find the product (organization-wide)
         const product = await Product.findOne({
           _id: productData.productId,
-          organizationId: orgId,
-          locationId
+          organizationId: orgId
         });
 
         if (!product) {
@@ -1075,27 +1035,26 @@ exports.bulkUpdateProducts = async (req, res) => {
             productId: productData.productId,
             supplier: productData.supplier,
             name: productData.name,
+            category: productData.category || '',
             defaultUnitPrice: productData.defaultUnitPrice,
             rebateAmount: productData.rebateAmount,
-            error: 'Product not found or does not belong to this location.'
+            error: 'Product not found.'
           });
           continue;
         }
 
-        // Find or create supplier (case-insensitive)
+        // Find or create supplier (case-insensitive) - organization-wide
         const supplierName = productData.supplier.trim();
         let supplier = await Supplier.findOne({
           name: { $regex: new RegExp(`^${supplierName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-          organizationId: orgId,
-          locationId
+          organizationId: orgId
         });
 
         if (!supplier) {
           // Create supplier if it doesn't exist
           supplier = await Supplier.create({
             name: supplierName,
-            organizationId: orgId,
-            locationId
+            organizationId: orgId
           });
         }
 
@@ -1104,7 +1063,6 @@ exports.bulkUpdateProducts = async (req, res) => {
           const existingProduct = await Product.findOne({
             name: productData.name.trim(),
             supplierId: supplier._id,
-            locationId,
             organizationId: orgId,
             _id: { $ne: product._id }
           });
@@ -1115,6 +1073,7 @@ exports.bulkUpdateProducts = async (req, res) => {
               productId: productData.productId,
               supplier: productData.supplier,
               name: productData.name,
+              category: productData.category || '',
               defaultUnitPrice: productData.defaultUnitPrice,
               rebateAmount: productData.rebateAmount,
               error: 'A product with this name already exists for this supplier.'
@@ -1125,6 +1084,7 @@ exports.bulkUpdateProducts = async (req, res) => {
 
         // Update product
         product.name = productData.name.trim();
+        product.category = productData.category ? productData.category.trim() : '';
         product.supplierId = supplier._id;
         product.defaultUnitPrice = defaultUnitPrice;
         product.rebateAmount = rebateAmount;
@@ -1134,6 +1094,7 @@ exports.bulkUpdateProducts = async (req, res) => {
           productId: product._id,
           supplier: supplier.name,
           name: product.name,
+          category: product.category,
           defaultUnitPrice: product.defaultUnitPrice,
           rebateAmount: product.rebateAmount
         });
@@ -1143,7 +1104,7 @@ exports.bulkUpdateProducts = async (req, res) => {
         let errorMessage = 'Unknown error occurred.';
         
         if (error.code === 11000) {
-          errorMessage = 'Product with this name already exists for this supplier and location.';
+          errorMessage = 'Product with this name already exists for this supplier.';
         } else if (error.message) {
           errorMessage = error.message;
         }
@@ -1153,6 +1114,7 @@ exports.bulkUpdateProducts = async (req, res) => {
           productId: productData.productId || '',
           supplier: productData.supplier || '',
           name: productData.name || '',
+          category: productData.category || '',
           defaultUnitPrice: productData.defaultUnitPrice || 0,
           rebateAmount: productData.rebateAmount || 0,
           error: errorMessage
@@ -1173,4 +1135,3 @@ exports.bulkUpdateProducts = async (req, res) => {
     return res.status(500).json({ message: 'Server error in bulk updating products.' });
   }
 };
-

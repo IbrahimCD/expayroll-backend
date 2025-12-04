@@ -13,20 +13,15 @@ const supplierSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Organization',
       required: true
-    },
-    locationId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Location',
-      required: true
     }
+    // locationId removed - suppliers are now organization-wide
   },
   {
     timestamps: true
   }
 );
 
-// Compound index to ensure unique supplier names per location
-supplierSchema.index({ name: 1, locationId: 1, organizationId: 1 }, { unique: true });
+// Compound index to ensure unique supplier names per organization (not per location)
+supplierSchema.index({ name: 1, organizationId: 1 }, { unique: true });
 
 module.exports = model('Supplier', supplierSchema);
-
