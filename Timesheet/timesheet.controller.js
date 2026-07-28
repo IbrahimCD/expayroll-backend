@@ -266,8 +266,11 @@ exports.getEmployeesForLocation = async (req, res) => {
       location = await Location.findById(locationId);
     }
 
+    // Exclude employees who have left. Uses $ne so that documents with a
+    // missing/legacy status field are still included.
     const employees = await Employee.find({
       organizationId: orgId,
+      status: { $ne: 'Left' },
       $or: [{ baseLocationId: locationId }, { locationAccess: locationId }]
     });
 

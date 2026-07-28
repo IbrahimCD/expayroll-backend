@@ -41,6 +41,12 @@ exports.getWageCostAllocation = async (req, res) => {
       // Use optional chaining to get payStructure.payStructureName
       const payStructureName = entry.payStructure?.payStructureName || 'N/A';
       const payrollId = entry.payrollId || 'N/A';
+      // Employee's home location, snapshotted onto the pay run at creation time.
+      const baseLocation = entry.baseLocation || 'N/A';
+      // E13/E14 are pay-run-level totals for the employee, NOT per-timesheet
+      // figures. They are repeated on every allocation row and must not be summed.
+      const niHoursUsed = entry.breakdown?.E13_NIHoursUsed || 0;
+      const cashHoursUsed = entry.breakdown?.E14_cashHoursUsed || 0;
 
       if (!entry.breakdown || !entry.breakdown.timesheetAllocations) continue;
 
@@ -67,6 +73,9 @@ exports.getWageCostAllocation = async (req, res) => {
           employeeName,
           payStructureName,
           payrollId,
+          baseLocation,
+          niHoursUsed,
+          cashHoursUsed,
           allocatedNiWage: niWage,
           allocatedCashWage: cashWage,
           allocatedEerNIC: eerNIC,
