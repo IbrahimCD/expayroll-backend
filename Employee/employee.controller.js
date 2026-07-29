@@ -24,6 +24,43 @@ function computeAge(dobString) {
 }
 
 /**
+ * Ensure a payroll ID is not already in use by another employee in the same
+ * organisation.
+ *
+ * Deliberately application-level rather than a unique index: existing live data
+ * may already contain duplicates, and a unique index would fail to build and
+ * would start rejecting unrelated writes. Blank/missing payroll IDs are ignored
+ * so records without one keep saving exactly as they did before.
+ *
+ * @param {*} orgId              organisation scope
+ * @param {*} payrollId          the value being saved
+ * @param {*} excludeEmployeeId  employee being updated (skip self-comparison)
+ */
+async function assertPayrollIdIsUnique(orgId, payrollId, excludeEmployeeId) {
+  if (!payrollId) return;
+
+  const query = { organizationId: orgId, payrollId };
+  if (excludeEmployeeId) {
+    query._id = { $ne: excludeEmployeeId };
+  }
+
+  const clash = await Employee.findOne(query)
+    .select('firstName lastName preferredName')
+    .lean();
+
+  if (!clash) return;
+
+  const owner =
+    clash.preferredName ||
+    `${clash.firstName || ''} ${clash.lastName || ''}`.trim() ||
+    'another employee';
+
+  throw new Error(
+    `Payroll ID "${payrollId}" is already used by ${owner}. Please change it.`
+  );
+}
+
+/**
  * Validate pay structure constraints:
  *  1) If hasDailyRates == true, must NOT have hasHourlyRates == true, and vice versa.
  *  2) If niDayMode == 'ALL', must NOT have cashDayMode == 'ALL'.
@@ -72,6 +109,9 @@ exports.createEmployee = async (req, res) => {
   try {
     // Merge organizationId from the token into the payload:
     const payload = { ...req.body, organizationId: req.user.orgId };
+
+    // Reject a payroll ID that already belongs to someone else in this org.
+    await assertPayrollIdIsUnique(req.user.orgId, payload.payrollId);
 
     // If payStructure provided, run validations + fill missing arrays
     if (payload.payStructure) {
@@ -159,19 +199,30 @@ exports.getEmployees = async (req, res) => {
       query.status = status;
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
+    // Opt-in "return every match" mode, used by the Batch Update screen.
+    // Triggers ONLY on an explicit limit of 'all' or 0. Every existing caller
+    // passes a positive number, so their paginated behaviour is unchanged.
+    const fetchAll =
+      String(limit).toLowerCase() === 'all' || Number(limit) === 0;
+
+    const numericLimit = Number(limit);
+    const skip = fetchAll ? 0 : (Number(page) - 1) * numericLimit;
 
     // We'll use .lean() so we can directly modify the returned documents
-    const employeesPromise = Employee.find(query)
-      .populate({ path: 'baseLocationId', select: 'name' })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean(); // plain JS objects
+    let employeesQuery = Employee.find(query).populate({
+      path: 'baseLocationId',
+      select: 'name'
+    });
 
+    if (!fetchAll) {
+      employeesQuery = employeesQuery.skip(skip).limit(numericLimit);
+    }
+
+    const employeesPromise = employeesQuery.lean(); // plain JS objects
     const countPromise = Employee.countDocuments(query);
 
     const [employeesRaw, total] = await Promise.all([employeesPromise, countPromise]);
-    const totalPages = Math.ceil(total / Number(limit));
+    const totalPages = fetchAll ? 1 : Math.ceil(total / numericLimit);
 
     // Compute `age` for each employee
     const employees = employeesRaw.map((emp) => {
@@ -221,6 +272,12 @@ exports.updateEmployee = async (req, res) => {
   try {
     const { employeeId } = req.params;
     const updates = req.body;
+
+    // Only check when the caller is actually changing the payroll ID, so
+    // updates that leave it untouched behave exactly as before.
+    if (Object.prototype.hasOwnProperty.call(updates, 'payrollId')) {
+      await assertPayrollIdIsUnique(req.user.orgId, updates.payrollId, employeeId);
+    }
 
     // If payStructure present, validate constraints first
     if (updates.payStructure) {
@@ -285,6 +342,59 @@ exports.updateEmployee = async (req, res) => {
     console.error('Error updating employee:', error);
     // If it's a validation error from our code, respond 400
     return res.status(400).json({ message: error.message });
+  }
+};
+
+/**
+ * Find every employee in the organisation that shares a payroll ID with at
+ * least one other employee, grouped by payroll ID.
+ *
+ * Read-only. Grouping is done in JS rather than with an aggregation pipeline so
+ * that Mongoose casts organizationId from the JWT string automatically.
+ */
+exports.getDuplicatePayrollIds = async (req, res) => {
+  try {
+    // $nin [null, ''] also excludes documents where payrollId is absent.
+    const employees = await Employee.find({
+      organizationId: req.user.orgId,
+      payrollId: { $nin: [null, ''] }
+    })
+      .select('firstName lastName preferredName email payrollId status baseLocationId')
+      .populate({ path: 'baseLocationId', select: 'name' })
+      .sort({ payrollId: 1, firstName: 1 })
+      .lean();
+
+    const groups = new Map();
+    for (const emp of employees) {
+      const key = emp.payrollId;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(emp);
+    }
+
+    const duplicates = [];
+    let affectedEmployees = 0;
+    for (const [payrollId, group] of groups.entries()) {
+      if (group.length > 1) {
+        duplicates.push({ payrollId, count: group.length, employees: group });
+        affectedEmployees += group.length;
+      }
+    }
+
+    // Worst offenders first, then alphabetical by payroll ID.
+    duplicates.sort(
+      (a, b) => b.count - a.count || String(a.payrollId).localeCompare(String(b.payrollId))
+    );
+
+    return res.status(200).json({
+      duplicateGroups: duplicates.length,
+      affectedEmployees,
+      duplicates
+    });
+  } catch (error) {
+    console.error('Error finding duplicate payroll IDs:', error);
+    return res
+      .status(500)
+      .json({ message: 'Server error finding duplicate payroll IDs' });
   }
 };
 

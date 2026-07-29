@@ -16,6 +16,10 @@ router.put('/batch-update', protect, employeeController.batchUpdateEmployees);
 // Get employees (with filtering and pagination)
 router.get('/', protect, employeeController.getEmployees);
 
+// Find employees sharing a payroll ID.
+// IMPORTANT: must stay ABOVE '/:employeeId' or it is swallowed as an id.
+router.get('/duplicate-payroll-ids', protect, employeeController.getDuplicatePayrollIds);
+
 // Get a single employee by ID
 router.get('/:employeeId', protect, employeeController.getEmployeeById);
 
