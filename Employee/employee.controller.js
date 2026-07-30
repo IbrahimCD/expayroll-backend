@@ -623,10 +623,25 @@ exports.batchUpdateEmployees = async (req, res) => {
       return res.status(400).json({ message: 'Invalid employees data.' });
     }
     const updatedEmployees = [];
+    const rowErrors = [];
 
-    for (const updateData of employees) {
+    for (const [index, updateData] of employees.entries()) {
+      // Captured before the flat pay-structure fields are stripped below, so a
+      // failing row can still be identified in the UI.
+      const rowRef = {
+        row: index + 1,
+        employeeId: updateData.employeeId || '',
+        employeeName:
+          updateData.preferredName ||
+          `${updateData.firstName || ''} ${updateData.lastName || ''}`.trim(),
+        payrollId: updateData.payrollId || ''
+      };
+
+      // Per-row isolation: a bad row is recorded and skipped instead of
+      // aborting the whole request. Body below is unchanged.
+      try {
       if (!updateData.employeeId) {
-        throw new Error('EmployeeId is missing in one of the update rows.');
+        throw new Error('employeeId is missing for this row.');
       }
 
       // Convert baseLocationId if provided (assumed to be a code)
@@ -748,14 +763,29 @@ exports.batchUpdateEmployees = async (req, res) => {
         { $set: updateData },
         { new: true }
       );
-      if (updatedEmp) {
-        updatedEmployees.push(updatedEmp);
+      if (!updatedEmp) {
+        throw new Error(
+          'No employee in your organisation matches this employeeId.'
+        );
+      }
+      updatedEmployees.push(updatedEmp);
+      } catch (rowError) {
+        rowErrors.push({
+          ...rowRef,
+          message: rowError.message || 'Unknown error updating this row.'
+        });
       }
     }
 
     return res.status(200).json({
-      message: `Batch update successful. Updated ${updatedEmployees.length} employees.`,
-      employees: updatedEmployees
+      message: rowErrors.length
+        ? `Updated ${updatedEmployees.length} of ${employees.length} row(s). ${rowErrors.length} row(s) failed.`
+        : `Batch update successful. Updated ${updatedEmployees.length} employees.`,
+      totalRows: employees.length,
+      updatedCount: updatedEmployees.length,
+      failedCount: rowErrors.length,
+      employees: updatedEmployees,
+      errors: rowErrors
     });
   } catch (error) {
     console.error('Error in batch updating employees:', error);
